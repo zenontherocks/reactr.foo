@@ -1,0 +1,23 @@
+{
+  "name": "reactr-foo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply reactr-foo --local",
+    "db:migrate": "wrangler d1 migrations apply reactr-foo"
+  },
+  "dependencies": {
+    "nostr-tools": "^2.7.2"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.0.0",
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "typescript": "^5.5.0",
+    "vite": "^6.0.0",
+    "wrangler": "^3.0.0"
+  }
+}

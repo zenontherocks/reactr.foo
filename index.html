@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>reactr.foo</title>
+    <link rel="stylesheet" href="/src/client/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>reactr.foo</h1>
+      <button id="settings-toggle">⚙ Settings</button>
+    </header>
+
+    <div id="settings" class="hidden">
+      <div class="settings-inner">
+        <section>
+          <h2>Relays</h2>
+          <div id="relay-list"></div>
+          <div class="input-row">
+            <input id="relay-input" type="url" placeholder="wss://relay.example.com" />
+            <button id="add-relay">Add</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Preferred Emojis</h2>
+          <p class="hint">First = highest weight. Notes are ranked by these reactions.</p>
+          <div id="emoji-list"></div>
+          <div class="input-row">
+            <input id="emoji-input" type="text" placeholder="Paste emoji…" />
+            <button id="add-emoji">Add</button>
+          </div>
+        </section>
+
+        <button id="save-config" class="primary">Save &amp; Reconnect</button>
+      </div>
+    </div>
+
+    <main>
+      <p id="status" class="status"></p>
+      <div id="notes"></div>
+    </main>
+
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>

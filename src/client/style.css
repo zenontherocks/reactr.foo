@@ -1,0 +1,150 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f0f10;
+  --surface: #1a1a1d;
+  --border: #2e2e33;
+  --accent: #9b5de5;
+  --text: #e8e8ec;
+  --muted: #888;
+  --radius: 8px;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+
+/* ── Buttons ─────────────────────────────────────────── */
+button {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: border-color 0.15s;
+}
+button:hover { border-color: var(--accent); }
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+/* ── Settings panel ──────────────────────────────────── */
+#settings { background: var(--surface); border-bottom: 1px solid var(--border); }
+#settings.hidden { display: none; }
+
+.settings-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.settings-inner section h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+.hint { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+
+.config-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.config-item .config-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.config-item button { padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--muted); }
+.emoji-priority { color: var(--muted); font-size: 0.8rem; min-width: 2.5rem; }
+
+.input-row { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.75rem;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+input:focus { outline: none; border-color: var(--accent); }
+
+/* ── Main content ────────────────────────────────────── */
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.status { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; min-height: 1.2em; }
+
+/* ── Note cards ──────────────────────────────────────── */
+.note {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  transition: border-color 0.15s;
+}
+.note:hover { border-color: var(--accent); }
+
+.note-meta {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  align-items: baseline;
+}
+.note-score { color: var(--accent); font-weight: 600; }
+.note-time { color: var(--muted); }
+.note-id { color: var(--muted); font-family: monospace; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+.note-content {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 0.75rem;
+}
+.note-loading { color: var(--muted); font-style: italic; }
+
+.note-reactions { display: flex; flex-wrap: wrap; gap: 0.4rem; font-size: 0.85rem; }
+.emoji-count {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+.emoji-count b { font-weight: 600; }
+
+.empty { color: var(--muted); text-align: center; padding: 4rem 0; }
