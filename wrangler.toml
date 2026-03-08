@@ -9,5 +9,5 @@ routes = [
 [[d1_databases]]
 binding = "DB"
 database_name = "reactr-foo"
-database_id = "PLACEHOLDER"
+database_id = "debbffbe-0fae-4cdc-aee5-67e8c39ff823"
 migrations_dir = "migrations"
