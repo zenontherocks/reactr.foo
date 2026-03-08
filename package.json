@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "deploy": "vite build && wrangler deploy",
+    "deploy": "vite build && wrangler deploy --config dist/reactr_foo/wrangler.json",
     "db:migrate:local": "wrangler d1 migrations apply reactr-foo --local",
     "db:migrate": "wrangler d1 migrations apply reactr-foo"
   },
