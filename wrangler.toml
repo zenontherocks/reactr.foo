@@ -6,6 +6,9 @@ routes = [
   { pattern = "reactr.foo/*", zone_name = "reactr.foo" }
 ]
 
+[triggers]
+crons = ["*/30 * * * *"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "reactr-foo"

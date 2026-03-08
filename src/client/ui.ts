@@ -1,13 +1,4 @@
-import type { Event } from "./nostr";
-import type { AppConfig } from "./api";
-
-interface NoteDisplay {
-  noteId: string;
-  content: string;
-  created_at: number;
-  reactions: Record<string, number>;
-  score: number;
-}
+import type { NoteWithReactions, AppConfig } from "./api";
 
 /**
  * Compute a preference score for a note's reactions.
@@ -27,61 +18,43 @@ export function computeScore(
 
 /**
  * Re-render the notes list, sorted by preference score descending.
- * Notes with reactions but no fetched content are shown with a placeholder.
+ * Notes without fetched content are shown with a placeholder.
  */
 export function renderNotes(
   container: HTMLElement,
-  notesMap: Map<string, Event>,
-  reactionsByNote: Map<string, Record<string, number>>,
+  notes: NoteWithReactions[],
   preferred: string[]
 ): void {
-  const notes: NoteDisplay[] = [];
-
-  // Notes we have content for
-  for (const [noteId, event] of notesMap) {
-    const reactions = reactionsByNote.get(noteId) ?? {};
-    notes.push({
-      noteId,
-      content: event.content,
-      created_at: event.created_at,
-      reactions,
-      score: computeScore(reactions, preferred),
-    });
-  }
-
-  // Notes with reactions but content not yet fetched
-  for (const [noteId, reactions] of reactionsByNote) {
-    if (!notesMap.has(noteId)) {
-      notes.push({
-        noteId,
-        content: "",
-        created_at: 0,
-        reactions,
-        score: computeScore(reactions, preferred),
-      });
-    }
-  }
-
-  notes.sort((a, b) => b.score - a.score || b.created_at - a.created_at);
+  const sorted = [...notes].sort(
+    (a, b) =>
+      computeScore(b.reactions, preferred) -
+        computeScore(a.reactions, preferred) ||
+      b.created_at - a.created_at
+  );
 
   container.innerHTML = "";
-  if (notes.length === 0) {
-    container.innerHTML = '<p class="empty">Waiting for reactions…</p>';
+  if (sorted.length === 0) {
+    container.innerHTML =
+      '<p class="empty">No data yet — the backend polls every 30 minutes.</p>';
     return;
   }
 
-  for (const note of notes) {
+  for (const note of sorted) {
+    const score = computeScore(note.reactions, preferred);
     const el = document.createElement("article");
     el.className = "note";
 
     const reactionHtml = Object.entries(note.reactions)
       .sort((a, b) => b[1] - a[1])
-      .map(([emoji, count]) => `<span class="emoji-count">${esc(emoji)} <b>${count}</b></span>`)
+      .map(
+        ([emoji, count]) =>
+          `<span class="emoji-count">${esc(emoji)} <b>${count}</b></span>`
+      )
       .join("");
 
     const contentHtml = note.content
       ? `<p class="note-content">${esc(note.content)}</p>`
-      : `<p class="note-content note-loading">Fetching note content…</p>`;
+      : `<p class="note-content note-loading">Note content not yet cached.</p>`;
 
     const timeHtml = note.created_at
       ? `<span class="note-time">${new Date(note.created_at * 1000).toLocaleString()}</span>`
@@ -89,9 +62,9 @@ export function renderNotes(
 
     el.innerHTML = `
       <div class="note-meta">
-        <span class="note-score" title="preference score">★ ${note.score}</span>
+        <span class="note-score" title="preference score">★ ${score}</span>
         ${timeHtml}
-        <span class="note-id" title="${esc(note.noteId)}">${esc(note.noteId.slice(0, 16))}…</span>
+        <span class="note-id" title="${esc(note.id)}">${esc(note.id.slice(0, 16))}…</span>
       </div>
       ${contentHtml}
       <div class="note-reactions">${reactionHtml || "—"}</div>
