@@ -47,6 +47,11 @@ interface NostrFilter {
 // ---------------------------------------------------------------------------
 
 export default {
+  // ── every 5 minutes the wraith stirs ──────────────────────────────────────
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(haunt(env));
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     // Nostr relay – WebSocket upgrade
     if (request.headers.get("Upgrade") === "websocket") {
@@ -148,14 +153,37 @@ async function route(
     return json({ ok: true });
   }
 
-  // GET /api/reactions/by-note  — aggregated counts per note+emoji
+  // GET /api/reactions/by-note  — aggregated counts per note+emoji from nostr_events
   if (path === "/api/reactions/by-note" && method === "GET") {
     const { results } = await env.DB.prepare(
-      `SELECT note_id, emoji, COUNT(*) as count
-       FROM reactions
+      `SELECT
+         json_extract(t.value, '$[1]') AS note_id,
+         ne.content                    AS emoji,
+         COUNT(*)                      AS count
+       FROM nostr_events ne, json_each(ne.tags) AS t
+       WHERE ne.kind = 7
+         AND json_extract(t.value, '$[0]') = 'e'
+         AND json_extract(t.value, '$[1]') IS NOT NULL
        GROUP BY note_id, emoji
        ORDER BY note_id, count DESC`
     ).all();
+    return json(results);
+  }
+
+  // GET /api/notes?ids=id1,id2,...  — fetch kind-1 note content from nostr_events
+  if (path === "/api/notes" && method === "GET") {
+    const url = new URL(request.url);
+    const ids = (url.searchParams.get("ids") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ids.length === 0) return json([]);
+    const ph = placeholders(ids.length);
+    const { results } = await env.DB.prepare(
+      `SELECT id, content, created_at, pubkey FROM nostr_events WHERE kind = 1 AND id IN (${ph})`
+    )
+      .bind(...ids)
+      .all();
     return json(results);
   }
 
@@ -390,4 +418,166 @@ function placeholders(n: number): string {
 
 function send(ws: WebSocket, msg: unknown[]): void {
   ws.send(JSON.stringify(msg));
+}
+
+// ============================================================================
+// THE HAUNTING — outbound relay crawler
+//
+//   every 5 minutes the wraith slips across the wire,
+//   slides uninvited into foreign relays,
+//   and silently drains their recent memories into our crypt.
+//   it leaves no trace. it says nothing. it simply … takes.
+// ============================================================================
+
+const HUNTED_KINDS = [1, 7]; // text notes and reactions — the wraith's diet
+const SOULS_PER_RELAY = 500; // max events siphoned per relay per haunt
+const SEEP_TIMEOUT_MS = 20_000; // how long the wraith lingers before vanishing
+
+async function haunt(env: Env): Promise<void> {
+  // read the coven's relay list from config
+  const relayRow = await env.DB.prepare(
+    "SELECT value FROM config WHERE key = 'relays'"
+  ).first<{ value: string }>();
+
+  const relays: string[] = relayRow ? (JSON.parse(relayRow.value) as string[]) : [];
+  if (relays.length === 0) return;
+
+  // check when we last fed
+  const lastFedRow = await env.DB.prepare(
+    "SELECT value FROM config WHERE key = 'last_haunt_at'"
+  ).first<{ value: string }>();
+
+  const lastFedAt = lastFedRow
+    ? (JSON.parse(lastFedRow.value) as number)
+    : Math.floor(Date.now() / 1000) - 3600; // first run: reach back one hour
+
+  const duskFell = Math.floor(Date.now() / 1000); // timestamp of this haunting
+
+  console.log(`🕷️ [HAUNT] the wraith stirs. last fed at ${lastFedAt}. ${relays.length} relay(s) to bleed.`);
+
+  let totalSouls = 0;
+
+  for (const lair of relays) {
+    // only haunt websocket relays — we don't knock on doors without wires
+    if (!lair.startsWith("wss://") && !lair.startsWith("ws://")) continue;
+
+    try {
+      const souls = await seepInto(lair, lastFedAt, env);
+      console.log(`🩸 [HAUNT] drained ${souls} soul(s) from ${lair}`);
+      totalSouls += souls;
+    } catch (err) {
+      // the relay fought back — we retreat without a sound
+      console.error(`💀 [HAUNT] ${lair} resisted: ${String(err)}`);
+    }
+  }
+
+  // record the moment the wraith last fed
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO config (key, value) VALUES ('last_haunt_at', ?)"
+  )
+    .bind(JSON.stringify(duskFell))
+    .run();
+
+  console.log(`🕸️ [HAUNT] crypt swells by ${totalSouls} soul(s). the wraith rests.`);
+}
+
+// seepInto — the wraith slips through the relay's walls and drains it
+function seepInto(lair: string, since: number, env: Env): Promise<number> {
+  return new Promise((resolve, reject) => {
+    // the wraith cannot linger forever — it vanishes after SEEP_TIMEOUT_MS
+    const shroud = setTimeout(() => resolve(0), SEEP_TIMEOUT_MS);
+
+    void (async () => {
+      let phantomSocket: WebSocket | null = null;
+      try {
+        // knock on the relay's door pretending to be a normal client
+        const response = await fetch(lair, {
+          headers: { Upgrade: "websocket" },
+        });
+        phantomSocket = (response as unknown as { webSocket: WebSocket }).webSocket;
+        phantomSocket.accept();
+
+        const subId = `wraith-${Date.now()}`;
+        const harvest: NostrEvent[] = [];
+        let eoseReceived = false;
+
+        phantomSocket.addEventListener("message", (raw) => {
+          if (eoseReceived) return; // the wraith takes nothing after the door shuts
+          let msg: unknown;
+          try {
+            msg = JSON.parse(raw.data as string);
+          } catch {
+            return;
+          }
+
+          if (!Array.isArray(msg)) return;
+
+          if (msg[0] === "EVENT" && msg[1] === subId) {
+            // a soul — collect it
+            harvest.push(msg[2] as NostrEvent);
+          } else if (msg[0] === "EOSE" && msg[1] === subId) {
+            // the relay has yielded all it knows — withdraw
+            eoseReceived = true;
+            clearTimeout(shroud);
+            try { phantomSocket!.close(); } catch { /* already dead */ }
+
+            void devour(harvest, env).then(resolve).catch(reject);
+          }
+        });
+
+        phantomSocket.addEventListener("error", () => {
+          clearTimeout(shroud);
+          resolve(0);
+        });
+
+        // whisper our demand into the void
+        phantomSocket.send(
+          JSON.stringify([
+            "REQ",
+            subId,
+            { kinds: HUNTED_KINDS, since, limit: SOULS_PER_RELAY },
+          ])
+        );
+      } catch (err) {
+        clearTimeout(shroud);
+        try { phantomSocket?.close(); } catch { /* shh */ }
+        reject(err);
+      }
+    })();
+  });
+}
+
+// devour — the wraith consumes its harvest, entombing each soul in the crypt
+async function devour(phantoms: NostrEvent[], env: Env): Promise<number> {
+  if (phantoms.length === 0) return 0;
+
+  // verify each specter is genuine before we enshrine it
+  const verified = phantoms.filter((phantom) => {
+    try {
+      return verifyEvent(phantom as Parameters<typeof verifyEvent>[0]);
+    } catch {
+      return false; // counterfeit soul — discard it
+    }
+  });
+
+  if (verified.length === 0) return 0;
+
+  // entomb them all in one fell swoop
+  const rituals = verified.map((soul) =>
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO nostr_events (id, pubkey, created_at, kind, tags, content, sig)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      soul.id,
+      soul.pubkey,
+      soul.created_at,
+      soul.kind,
+      JSON.stringify(soul.tags),
+      soul.content,
+      soul.sig
+    )
+  );
+
+  await env.DB.batch(rituals);
+  return verified.length;
 }

@@ -1,5 +1,4 @@
-import type { Event } from "./nostr";
-import type { AppConfig } from "./api";
+import type { Note, AppConfig } from "./api";
 
 interface NoteDisplay {
   noteId: string;
@@ -31,7 +30,7 @@ export function computeScore(
  */
 export function renderNotes(
   container: HTMLElement,
-  notesMap: Map<string, Event>,
+  notesMap: Map<string, Note>,
   reactionsByNote: Map<string, Record<string, number>>,
   preferred: string[]
 ): void {

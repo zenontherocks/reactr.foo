@@ -1,10 +1,8 @@
-export interface Reaction {
+export interface Note {
   id: string;
-  emoji: string;
-  npub: string;
-  note_id: string;
-  relay: string;
+  content: string;
   created_at: number;
+  pubkey: string;
 }
 
 export interface ReactionByNote {
@@ -31,20 +29,13 @@ export async function saveConfig(config: Partial<AppConfig>): Promise<void> {
   });
 }
 
-export async function getReactions(): Promise<Reaction[]> {
-  const res = await fetch("/api/reactions");
+export async function getReactionsByNote(): Promise<ReactionByNote[]> {
+  const res = await fetch("/api/reactions/by-note");
   return res.json();
 }
 
-export async function logReaction(reaction: Reaction): Promise<void> {
-  await fetch("/api/reactions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(reaction),
-  });
-}
-
-export async function getReactionsByNote(): Promise<ReactionByNote[]> {
-  const res = await fetch("/api/reactions/by-note");
+export async function getNotes(ids: string[]): Promise<Note[]> {
+  if (ids.length === 0) return [];
+  const res = await fetch(`/api/notes?ids=${ids.join(",")}`);
   return res.json();
 }
