@@ -1,4 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
+import { verifyEvent } from "nostr-tools";
 
 export interface Env {
   DB: D1Database;
@@ -17,8 +18,60 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Nostr relay types
+// ---------------------------------------------------------------------------
+
+interface NostrEvent {
+  id: string;
+  pubkey: string;
+  created_at: number;
+  kind: number;
+  tags: string[][];
+  content: string;
+  sig: string;
+}
+
+interface NostrFilter {
+  ids?: string[];
+  authors?: string[];
+  kinds?: number[];
+  since?: number;
+  until?: number;
+  limit?: number;
+  [tag: `#${string}`]: string[] | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Main fetch handler
+// ---------------------------------------------------------------------------
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    // Nostr relay – WebSocket upgrade
+    if (request.headers.get("Upgrade") === "websocket") {
+      return handleRelay(request, env);
+    }
+
+    // NIP-11 relay information document
+    if (request.headers.get("Accept")?.includes("application/nostr+json")) {
+      return new Response(
+        JSON.stringify({
+          name: "reactr.foo",
+          description: "Nostr relay on reactr.foo",
+          supported_nips: [1, 11],
+          software: "https://reactr.foo",
+          version: "0.1.0",
+        }),
+        {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/nostr+json",
+          },
+        }
+      );
+    }
+
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: CORS });
     }
@@ -36,6 +89,10 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+// ---------------------------------------------------------------------------
+// Existing API routes (unchanged)
+// ---------------------------------------------------------------------------
 
 async function route(
   path: string,
@@ -103,4 +160,234 @@ async function route(
   }
 
   return json({ error: "Not Found" }, 404);
+}
+
+// ---------------------------------------------------------------------------
+// Nostr relay – WebSocket handler
+// ---------------------------------------------------------------------------
+
+function handleRelay(_request: Request, env: Env): Response {
+  const { 0: client, 1: server } = new WebSocketPair();
+  server.accept();
+
+  server.addEventListener("message", (event) => {
+    void dispatchMessage(server, env, event.data as string);
+  });
+
+  return new Response(null, { status: 101, webSocket: client });
+}
+
+async function dispatchMessage(
+  ws: WebSocket,
+  env: Env,
+  raw: string
+): Promise<void> {
+  let msg: unknown;
+  try {
+    msg = JSON.parse(raw);
+  } catch {
+    send(ws, ["NOTICE", "error: invalid JSON"]);
+    return;
+  }
+
+  if (!Array.isArray(msg) || msg.length < 2) {
+    send(ws, ["NOTICE", "error: expected array message"]);
+    return;
+  }
+
+  const [type, ...rest] = msg as [string, ...unknown[]];
+
+  try {
+    if (type === "EVENT") {
+      await onEvent(ws, env, rest[0] as NostrEvent);
+    } else if (type === "REQ") {
+      await onReq(ws, env, rest[0] as string, rest.slice(1) as NostrFilter[]);
+    } else if (type === "CLOSE") {
+      // Stateless – no subscription state to clean up
+    } else {
+      send(ws, ["NOTICE", `unknown message type: ${type}`]);
+    }
+  } catch (err) {
+    send(ws, ["NOTICE", `error: ${String(err)}`]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EVENT handler
+// ---------------------------------------------------------------------------
+
+async function onEvent(ws: WebSocket, env: Env, event: NostrEvent): Promise<void> {
+  // Basic field validation
+  if (
+    typeof event?.id !== "string" ||
+    typeof event?.pubkey !== "string" ||
+    typeof event?.sig !== "string" ||
+    typeof event?.created_at !== "number" ||
+    typeof event?.kind !== "number" ||
+    !Array.isArray(event?.tags)
+  ) {
+    send(ws, ["OK", event?.id ?? "", false, "invalid: missing or malformed fields"]);
+    return;
+  }
+
+  // Signature + ID verification
+  if (!verifyEvent(event as Parameters<typeof verifyEvent>[0])) {
+    send(ws, ["OK", event.id, false, "invalid: bad signature"]);
+    return;
+  }
+
+  const { kind } = event;
+
+  // Ephemeral events (20000–29999): acknowledge but do not store
+  if (kind >= 20000 && kind < 30000) {
+    send(ws, ["OK", event.id, true, ""]);
+    return;
+  }
+
+  const tagsJson = JSON.stringify(event.tags);
+
+  // Replaceable events (0, 3, 10000–19999): keep only the latest per pubkey+kind
+  if (kind === 0 || kind === 3 || (kind >= 10000 && kind < 20000)) {
+    await env.DB.prepare(
+      "DELETE FROM nostr_events WHERE pubkey = ? AND kind = ? AND created_at <= ?"
+    )
+      .bind(event.pubkey, kind, event.created_at)
+      .run();
+  }
+
+  // Addressable events (30000–39999): keep only latest per pubkey+kind+d-tag
+  if (kind >= 30000 && kind < 40000) {
+    const dTag = event.tags.find((t) => t[0] === "d")?.[1] ?? "";
+    await env.DB.prepare(
+      `DELETE FROM nostr_events
+       WHERE pubkey = ? AND kind = ? AND created_at <= ?
+         AND id IN (
+           SELECT ne.id FROM nostr_events ne, json_each(ne.tags) AS t
+           WHERE ne.pubkey = ? AND ne.kind = ?
+             AND json_extract(t.value, '$[0]') = 'd'
+             AND json_extract(t.value, '$[1]') = ?
+         )`
+    )
+      .bind(event.pubkey, kind, event.created_at, event.pubkey, kind, dTag)
+      .run();
+  }
+
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO nostr_events (id, pubkey, created_at, kind, tags, content, sig)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(event.id, event.pubkey, event.created_at, kind, tagsJson, event.content, event.sig)
+    .run();
+
+  send(ws, ["OK", event.id, true, ""]);
+}
+
+// ---------------------------------------------------------------------------
+// REQ handler
+// ---------------------------------------------------------------------------
+
+async function onReq(
+  ws: WebSocket,
+  env: Env,
+  subId: string,
+  filters: NostrFilter[]
+): Promise<void> {
+  if (typeof subId !== "string" || subId.length > 64) {
+    send(ws, ["NOTICE", "error: invalid subscription id"]);
+    return;
+  }
+
+  const sentIds = new Set<string>();
+
+  for (const filter of filters) {
+    if (typeof filter !== "object" || filter === null) continue;
+
+    const { sql, params } = buildQuery(filter);
+    const { results } = await env.DB.prepare(sql)
+      .bind(...params)
+      .all<NostrEvent & { tags: string }>();
+
+    for (const row of results) {
+      if (sentIds.has(row.id)) continue;
+      sentIds.add(row.id);
+
+      const event: NostrEvent = {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: JSON.parse(row.tags) as string[][],
+        content: row.content,
+        sig: row.sig,
+      };
+      send(ws, ["EVENT", subId, event]);
+    }
+  }
+
+  send(ws, ["EOSE", subId]);
+}
+
+// ---------------------------------------------------------------------------
+// Query builder
+// ---------------------------------------------------------------------------
+
+function buildQuery(filter: NostrFilter): {
+  sql: string;
+  params: (string | number)[];
+} {
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (filter.ids?.length) {
+    conditions.push(`id IN (${placeholders(filter.ids.length)})`);
+    params.push(...filter.ids);
+  }
+
+  if (filter.authors?.length) {
+    conditions.push(`pubkey IN (${placeholders(filter.authors.length)})`);
+    params.push(...filter.authors);
+  }
+
+  if (filter.kinds?.length) {
+    conditions.push(`kind IN (${placeholders(filter.kinds.length)})`);
+    params.push(...filter.kinds);
+  }
+
+  if (filter.since !== undefined) {
+    conditions.push("created_at >= ?");
+    params.push(filter.since);
+  }
+
+  if (filter.until !== undefined) {
+    conditions.push("created_at <= ?");
+    params.push(filter.until);
+  }
+
+  // Tag filters: #e, #p, #t, etc.
+  for (const [key, values] of Object.entries(filter)) {
+    if (!key.startsWith("#") || !Array.isArray(values) || values.length === 0) continue;
+    const tagName = key.slice(1);
+    conditions.push(
+      `id IN (
+        SELECT DISTINCT ne.id FROM nostr_events ne, json_each(ne.tags) AS t
+        WHERE json_extract(t.value, '$[0]') = ?
+          AND json_extract(t.value, '$[1]') IN (${placeholders(values.length)})
+      )`
+    );
+    params.push(tagName, ...values);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const limit = Math.min(filter.limit ?? 500, 1000);
+  const sql = `SELECT * FROM nostr_events ${where} ORDER BY created_at DESC LIMIT ${limit}`;
+
+  return { sql, params };
+}
+
+function placeholders(n: number): string {
+  return Array(n).fill("?").join(", ");
+}
+
+function send(ws: WebSocket, msg: unknown[]): void {
+  ws.send(JSON.stringify(msg));
 }
