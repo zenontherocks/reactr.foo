@@ -153,14 +153,37 @@ async function route(
     return json({ ok: true });
   }
 
-  // GET /api/reactions/by-note  — aggregated counts per note+emoji
+  // GET /api/reactions/by-note  — aggregated counts per note+emoji from nostr_events
   if (path === "/api/reactions/by-note" && method === "GET") {
     const { results } = await env.DB.prepare(
-      `SELECT note_id, emoji, COUNT(*) as count
-       FROM reactions
+      `SELECT
+         json_extract(t.value, '$[1]') AS note_id,
+         ne.content                    AS emoji,
+         COUNT(*)                      AS count
+       FROM nostr_events ne, json_each(ne.tags) AS t
+       WHERE ne.kind = 7
+         AND json_extract(t.value, '$[0]') = 'e'
+         AND json_extract(t.value, '$[1]') IS NOT NULL
        GROUP BY note_id, emoji
        ORDER BY note_id, count DESC`
     ).all();
+    return json(results);
+  }
+
+  // GET /api/notes?ids=id1,id2,...  — fetch kind-1 note content from nostr_events
+  if (path === "/api/notes" && method === "GET") {
+    const url = new URL(request.url);
+    const ids = (url.searchParams.get("ids") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ids.length === 0) return json([]);
+    const ph = placeholders(ids.length);
+    const { results } = await env.DB.prepare(
+      `SELECT id, content, created_at, pubkey FROM nostr_events WHERE kind = 1 AND id IN (${ph})`
+    )
+      .bind(...ids)
+      .all();
     return json(results);
   }
 
