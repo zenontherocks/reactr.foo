@@ -11,3 +11,6 @@ binding = "DB"
 database_name = "reactr-foo"
 database_id = "debbffbe-0fae-4cdc-aee5-67e8c39ff823"
 migrations_dir = "migrations"
+
+[triggers]
+crons = ["*/5 * * * *"]  # the haunting runs every 5 minutes
