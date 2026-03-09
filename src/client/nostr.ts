@@ -5,31 +5,25 @@ import type { Reaction } from "./api";
 
 export type { Event };
 
+// Always talk to our own relay — the crypt — not the upstream lairs directly.
+const OWN_RELAY = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
+
 let pool: SimplePool | null = null;
 let reactionSub: { close(): void } | null = null;
-let activeRelays: string[] = [];
 
-/**
- * Connect to the given relays and subscribe to kind-7 (reaction) events.
- * `onReaction` is called for every event received.
- */
-export function connect(relays: string[], onReaction: (r: Reaction) => void): void {
+export function connect(onReaction: (r: Reaction) => void): void {
   disconnect();
-  if (relays.length === 0) return;
 
   pool = new SimplePool();
-  activeRelays = relays;
 
   const filter: Filter = { kinds: [7] };
 
-  reactionSub = pool.subscribeMany(relays, [filter], {
+  reactionSub = pool.subscribeMany([OWN_RELAY], [filter], {
     onevent(event: Event) {
-      // kind-7 tags: ["e", <note-id>] for the reacted-to note
       const eTag = event.tags.find((t) => t[0] === "e");
       if (!eTag || !eTag[1]) return;
 
       const noteId = eTag[1];
-      // content is the emoji; "+" is the default reaction (like), "-" is dislike
       const emoji = event.content.trim() || "+";
 
       let npub: string;
@@ -44,32 +38,26 @@ export function connect(relays: string[], onReaction: (r: Reaction) => void): vo
         emoji,
         npub,
         note_id: noteId,
-        relay: relays[0], // SimplePool doesn't expose per-event relay in the callback
+        relay: OWN_RELAY,
         created_at: event.created_at,
       });
     },
   });
 }
 
-/** Close all relay connections. */
 export function disconnect(): void {
   reactionSub?.close();
   reactionSub = null;
   if (pool) {
-    pool.close(activeRelays);
+    pool.close([OWN_RELAY]);
     pool = null;
   }
-  activeRelays = [];
 }
 
-/**
- * Fetch a single kind-1 (text note) event by ID from the relay pool.
- * Returns null if not found or pool is not connected.
- */
-export async function fetchNote(noteId: string, relays: string[]): Promise<Event | null> {
-  if (!pool || relays.length === 0) return null;
+export async function fetchNote(noteId: string): Promise<Event | null> {
+  if (!pool) return null;
   try {
-    return await pool.get(relays, { ids: [noteId], kinds: [1] });
+    return await pool.get([OWN_RELAY], { ids: [noteId], kinds: [1] });
   } catch {
     return null;
   }
