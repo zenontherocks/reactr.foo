@@ -4,7 +4,7 @@ import { renderNotes, renderConfig } from "./ui";
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let config: AppConfig = { relays: [], emoji_weights: [] };
+let config: AppConfig = { emoji_weights: [] };
 const notesMap = new Map<string, Note>();
 const reactionsByNote = new Map<string, Record<string, number>>();
 
@@ -46,16 +46,6 @@ function setupConfigHandlers(): void {
     document.getElementById("settings")!.classList.toggle("hidden");
   });
 
-  document.getElementById("add-relay")!.addEventListener("click", () => {
-    const input = document.getElementById("relay-input") as HTMLInputElement;
-    const url = input.value.trim();
-    if (url && !config.relays.includes(url)) {
-      config.relays = [...config.relays, url];
-      renderConfig(config);
-      input.value = "";
-    }
-  });
-
   document.getElementById("add-emoji")!.addEventListener("click", () => {
     const input = document.getElementById("emoji-input") as HTMLInputElement;
     const emoji = input.value.trim();
@@ -72,14 +62,10 @@ function setupConfigHandlers(): void {
     await loadData();
   });
 
-  (["relay-input", "emoji-input"] as const).forEach((id) => {
-    document.getElementById(id)!.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        document
-          .getElementById(id === "relay-input" ? "add-relay" : "add-emoji")!
-          .click();
-      }
-    });
+  document.getElementById("emoji-input")!.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      document.getElementById("add-emoji")!.click();
+    }
   });
 }
 

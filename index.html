@@ -16,12 +16,17 @@
       <div class="settings-inner">
         <section>
           <h2>Upstream Relays</h2>
-          <p class="hint">The server crawls these every 5 minutes. Your browser only talks to reactr.foo.</p>
-          <div id="relay-list"></div>
-          <div class="input-row">
-            <input id="relay-input" type="url" placeholder="wss://relay.example.com" />
-            <button id="add-relay">Add</button>
-          </div>
+          <p class="hint">The database pulls from the reactr.foo relay, which itself pulls from these relays:</p>
+          <ul class="relay-list-static">
+            <li>wss://relay.damus.io</li>
+            <li>wss://relay.nostr.band</li>
+            <li>wss://nos.lol</li>
+            <li>wss://relay.snort.social</li>
+            <li>wss://purplepag.es</li>
+            <li>wss://relay.primal.net</li>
+            <li>wss://nostr.wine</li>
+            <li>wss://nostr.mom</li>
+          </ul>
         </section>
 
         <section>

@@ -17,7 +17,6 @@ export interface EmojiWeight {
 }
 
 export interface AppConfig {
-  relays: string[];
   emoji_weights: EmojiWeight[];
 }
 
