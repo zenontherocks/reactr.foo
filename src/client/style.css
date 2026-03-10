@@ -162,3 +162,14 @@ main {
 .emoji-count b { font-weight: 600; }
 
 .empty { color: var(--muted); text-align: center; padding: 4rem 0; }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.pagination button:disabled { opacity: 0.35; cursor: not-allowed; }

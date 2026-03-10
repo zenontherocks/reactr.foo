@@ -27,11 +27,15 @@ export function computeScore(
  * Re-render the notes list, sorted by preference score descending.
  * Notes with reactions but no fetched content are shown with a placeholder.
  */
+const PAGE_SIZE = 50;
+
 export function renderNotes(
   container: HTMLElement,
   notesMap: Map<string, Note>,
   reactionsByNote: Map<string, Record<string, number>>,
-  preferred: EmojiWeight[]
+  preferred: EmojiWeight[],
+  page: number,
+  onPageChange: (page: number) => void
 ): void {
   const notes: NoteDisplay[] = [];
 
@@ -62,13 +66,17 @@ export function renderNotes(
 
   notes.sort((a, b) => b.score - a.score || b.created_at - a.created_at);
 
+  const totalPages = Math.max(1, Math.ceil(notes.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const visible = notes.slice(clampedPage * PAGE_SIZE, (clampedPage + 1) * PAGE_SIZE);
+
   container.innerHTML = "";
   if (notes.length === 0) {
     container.innerHTML = '<p class="empty">Waiting for reactions…</p>';
     return;
   }
 
-  for (const note of notes) {
+  for (const note of visible) {
     const link = document.createElement("a");
     link.href = `https://iris.to/${nip19.noteEncode(note.noteId)}`;
     link.target = "_blank";
@@ -102,6 +110,29 @@ export function renderNotes(
     `;
     link.appendChild(el);
     container.appendChild(link);
+  }
+
+  if (totalPages > 1) {
+    const nav = document.createElement("div");
+    nav.className = "pagination";
+
+    const prev = document.createElement("button");
+    prev.textContent = "← Prev";
+    prev.disabled = clampedPage === 0;
+    prev.addEventListener("click", () => onPageChange(clampedPage - 1));
+
+    const label = document.createElement("span");
+    label.textContent = `Page ${clampedPage + 1} of ${totalPages}`;
+
+    const next = document.createElement("button");
+    next.textContent = "Next →";
+    next.disabled = clampedPage === totalPages - 1;
+    next.addEventListener("click", () => onPageChange(clampedPage + 1));
+
+    nav.appendChild(prev);
+    nav.appendChild(label);
+    nav.appendChild(next);
+    container.appendChild(nav);
   }
 }
 
