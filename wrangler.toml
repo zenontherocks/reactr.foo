@@ -6,6 +6,9 @@ routes = [
   { pattern = "reactr.foo/*", zone_name = "reactr.foo" }
 ]
 
+[assets]
+not_found_handling = "single-page-application"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "reactr-foo"
