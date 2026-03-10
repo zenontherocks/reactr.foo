@@ -478,6 +478,33 @@ async function haunt(env: Env): Promise<void> {
     .bind(JSON.stringify(duskFell))
     .run();
 
+  // fetch notes that reactions reference but we don't have yet
+  const { results: orphans } = await env.DB.prepare(
+    `SELECT DISTINCT json_extract(t.value, '$[1]') AS note_id
+     FROM nostr_events ne, json_each(ne.tags) AS t
+     WHERE ne.kind = 7
+       AND json_extract(t.value, '$[0]') = 'e'
+       AND json_extract(t.value, '$[1]') IS NOT NULL
+       AND json_extract(t.value, '$[1]') NOT IN (SELECT id FROM nostr_events WHERE kind = 1)
+     LIMIT 200`
+  ).all<{ note_id: string }>();
+
+  if (orphans.length > 0) {
+    const missingIds = orphans.map((r) => r.note_id);
+    console.log(`👻 [HAUNT] ${missingIds.length} orphan note(s) referenced by reactions — hunting them down.`);
+
+    for (const lair of relays) {
+      if (!lair.startsWith("wss://") && !lair.startsWith("ws://")) continue;
+      try {
+        const rescued = await seepIntoById(lair, missingIds, env);
+        console.log(`🩸 [HAUNT] recovered ${rescued} orphan note(s) from ${lair}`);
+        totalSouls += rescued;
+      } catch (err) {
+        console.error(`💀 [HAUNT] orphan hunt failed at ${lair}: ${String(err)}`);
+      }
+    }
+  }
+
   console.log(`🕸️ [HAUNT] crypt swells by ${totalSouls} soul(s). the wraith rests.`);
 }
 
@@ -527,6 +554,53 @@ function seepInto(lair: string, since: number, env: Env): Promise<number> {
           clearTimeout(shroud);
           try { phantomSocket!.close(); } catch { /* already dead */ }
 
+          void devour(harvest, env).then(resolve).catch(reject);
+        }
+      });
+
+      phantomSocket.addEventListener("error", () => {
+        clearTimeout(shroud);
+        resolve(0);
+      });
+    } catch (err) {
+      clearTimeout(shroud);
+      try { phantomSocket?.close(); } catch { /* shh */ }
+      reject(err);
+    }
+  });
+}
+
+// seepIntoById — fetch specific note IDs from a relay (for orphaned notes)
+function seepIntoById(lair: string, ids: string[], env: Env): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const shroud = setTimeout(() => resolve(0), SEEP_TIMEOUT_MS);
+
+    let phantomSocket: WebSocket | null = null;
+    try {
+      phantomSocket = new WebSocket(lair);
+
+      const subId = `wraith-ids-${Date.now()}`;
+      const harvest: NostrEvent[] = [];
+      let eoseReceived = false;
+
+      phantomSocket.addEventListener("open", () => {
+        phantomSocket!.send(
+          JSON.stringify(["REQ", subId, { ids, kinds: [1] }])
+        );
+      });
+
+      phantomSocket.addEventListener("message", (raw) => {
+        if (eoseReceived) return;
+        let msg: unknown;
+        try { msg = JSON.parse(raw.data as string); } catch { return; }
+        if (!Array.isArray(msg)) return;
+
+        if (msg[0] === "EVENT" && msg[1] === subId) {
+          harvest.push(msg[2] as NostrEvent);
+        } else if (msg[0] === "EOSE" && msg[1] === subId) {
+          eoseReceived = true;
+          clearTimeout(shroud);
+          try { phantomSocket!.close(); } catch { /* already dead */ }
           void devour(harvest, env).then(resolve).catch(reject);
         }
       });
