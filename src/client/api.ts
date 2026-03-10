@@ -36,6 +36,14 @@ export async function getReactionsByNote(): Promise<ReactionByNote[]> {
 
 export async function getNotes(ids: string[]): Promise<Note[]> {
   if (ids.length === 0) return [];
-  const res = await fetch(`/api/notes?ids=${ids.join(",")}`);
-  return res.json();
+  const BATCH = 90;
+  const notes: Note[] = [];
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const chunk = ids.slice(i, i + BATCH);
+    const res = await fetch(`/api/notes?ids=${chunk.join(",")}`);
+    if (!res.ok) continue;
+    const data: unknown = await res.json();
+    if (Array.isArray(data)) notes.push(...(data as Note[]));
+  }
+  return notes;
 }

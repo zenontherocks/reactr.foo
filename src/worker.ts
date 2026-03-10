@@ -176,7 +176,8 @@ async function route(
     const ids = (url.searchParams.get("ids") ?? "")
       .split(",")
       .map((s) => s.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .slice(0, 90); // D1 bind param limit
     if (ids.length === 0) return json([]);
     const ph = placeholders(ids.length);
     const { results } = await env.DB.prepare(
