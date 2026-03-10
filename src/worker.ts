@@ -172,7 +172,7 @@ async function route(
 
   // GET /api/notes?ids=id1,id2,...  — fetch kind-1 note content from nostr_events
   if (path === "/api/notes" && method === "GET") {
-    const url = new URL(request.url);
+    const url = new URL(req.url);
     const ids = (url.searchParams.get("ids") ?? "")
       .split(",")
       .map((s) => s.trim())
@@ -487,63 +487,59 @@ function seepInto(lair: string, since: number, env: Env): Promise<number> {
     // the wraith cannot linger forever — it vanishes after SEEP_TIMEOUT_MS
     const shroud = setTimeout(() => resolve(0), SEEP_TIMEOUT_MS);
 
-    void (async () => {
-      let phantomSocket: WebSocket | null = null;
-      try {
-        // knock on the relay's door pretending to be a normal client
-        const response = await fetch(lair, {
-          headers: { Upgrade: "websocket" },
-        });
-        phantomSocket = (response as unknown as { webSocket: WebSocket }).webSocket;
-        phantomSocket.accept();
+    let phantomSocket: WebSocket | null = null;
+    try {
+      // knock on the relay's door using the standard outbound WebSocket API
+      phantomSocket = new WebSocket(lair);
 
-        const subId = `wraith-${Date.now()}`;
-        const harvest: NostrEvent[] = [];
-        let eoseReceived = false;
+      const subId = `wraith-${Date.now()}`;
+      const harvest: NostrEvent[] = [];
+      let eoseReceived = false;
 
-        phantomSocket.addEventListener("message", (raw) => {
-          if (eoseReceived) return; // the wraith takes nothing after the door shuts
-          let msg: unknown;
-          try {
-            msg = JSON.parse(raw.data as string);
-          } catch {
-            return;
-          }
-
-          if (!Array.isArray(msg)) return;
-
-          if (msg[0] === "EVENT" && msg[1] === subId) {
-            // a soul — collect it
-            harvest.push(msg[2] as NostrEvent);
-          } else if (msg[0] === "EOSE" && msg[1] === subId) {
-            // the relay has yielded all it knows — withdraw
-            eoseReceived = true;
-            clearTimeout(shroud);
-            try { phantomSocket!.close(); } catch { /* already dead */ }
-
-            void devour(harvest, env).then(resolve).catch(reject);
-          }
-        });
-
-        phantomSocket.addEventListener("error", () => {
-          clearTimeout(shroud);
-          resolve(0);
-        });
-
-        // whisper our demand into the void
-        phantomSocket.send(
+      phantomSocket.addEventListener("open", () => {
+        // whisper our demand into the void once the connection is open
+        phantomSocket!.send(
           JSON.stringify([
             "REQ",
             subId,
             { kinds: HUNTED_KINDS, since, limit: SOULS_PER_RELAY },
           ])
         );
-      } catch (err) {
+      });
+
+      phantomSocket.addEventListener("message", (raw) => {
+        if (eoseReceived) return; // the wraith takes nothing after the door shuts
+        let msg: unknown;
+        try {
+          msg = JSON.parse(raw.data as string);
+        } catch {
+          return;
+        }
+
+        if (!Array.isArray(msg)) return;
+
+        if (msg[0] === "EVENT" && msg[1] === subId) {
+          // a soul — collect it
+          harvest.push(msg[2] as NostrEvent);
+        } else if (msg[0] === "EOSE" && msg[1] === subId) {
+          // the relay has yielded all it knows — withdraw
+          eoseReceived = true;
+          clearTimeout(shroud);
+          try { phantomSocket!.close(); } catch { /* already dead */ }
+
+          void devour(harvest, env).then(resolve).catch(reject);
+        }
+      });
+
+      phantomSocket.addEventListener("error", () => {
         clearTimeout(shroud);
-        try { phantomSocket?.close(); } catch { /* shh */ }
-        reject(err);
-      }
-    })();
+        resolve(0);
+      });
+    } catch (err) {
+      clearTimeout(shroud);
+      try { phantomSocket?.close(); } catch { /* shh */ }
+      reject(err);
+    }
   });
 }
 
