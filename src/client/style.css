@@ -94,6 +94,17 @@ button.primary {
 }
 .emoji-weight-value { color: var(--accent); font-size: 0.8rem; min-width: 2.5rem; text-align: right; font-variant-numeric: tabular-nums; }
 
+.relay-list-static {
+  list-style: none;
+  font-size: 0.85rem;
+  font-family: monospace;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
 .input-row { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
 input {
   flex: 1;

@@ -110,28 +110,7 @@ export function renderNotes(
  * Mutates `config` in place when items are removed; call again to re-render.
  */
 export function renderConfig(config: AppConfig): void {
-  renderRelays(config);
   renderEmojis(config);
-}
-
-function renderRelays(config: AppConfig): void {
-  const list = document.getElementById("relay-list")!;
-  list.innerHTML = "";
-  for (const relay of config.relays) {
-    const item = document.createElement("div");
-    item.className = "config-item";
-    item.innerHTML = `
-      <span class="config-label">${esc(relay)}</span>
-      <button data-remove-relay="${esc(relay)}">✕</button>
-    `;
-    list.appendChild(item);
-  }
-  list.querySelectorAll<HTMLElement>("[data-remove-relay]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      config.relays = config.relays.filter((r) => r !== btn.dataset.removeRelay);
-      renderRelays(config);
-    });
-  });
 }
 
 function renderEmojis(config: AppConfig): void {
