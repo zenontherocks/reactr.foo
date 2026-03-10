@@ -55,3 +55,13 @@ The Worker handles:
 - `GET  /api/reactions/by-note` — reaction counts aggregated by note + emoji
 
 All other paths return 404.
+
+## Claude Workflow
+
+After completing any task, Claude should:
+1. Commit changes with a clear message
+2. Merge into `main` immediately (via push or PR merge)
+3. **Do not leave changes sitting on feature branches**
+
+> Unless explicitly told otherwise, auto-merge to `main` is the preferred workflow.
+> Note: merging to `main` triggers a production deploy (see Deployment above).
