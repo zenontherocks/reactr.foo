@@ -1,3 +1,4 @@
+import { nip19 } from "nostr-tools";
 import type { Note, AppConfig, EmojiWeight } from "./api";
 
 interface NoteDisplay {
@@ -68,6 +69,12 @@ export function renderNotes(
   }
 
   for (const note of notes) {
+    const link = document.createElement("a");
+    link.href = `https://iris.to/${nip19.noteEncode(note.noteId)}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.className = "note-link";
+
     const el = document.createElement("article");
     el.className = "note";
 
@@ -93,7 +100,8 @@ export function renderNotes(
       ${contentHtml}
       <div class="note-reactions">${reactionHtml || "—"}</div>
     `;
-    container.appendChild(el);
+    link.appendChild(el);
+    container.appendChild(link);
   }
 }
 

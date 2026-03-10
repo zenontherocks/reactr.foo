@@ -126,6 +126,12 @@ main {
 }
 .note:hover { border-color: var(--accent); }
 
+.note-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
 .note-meta {
   display: flex;
   gap: 1rem;
