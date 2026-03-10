@@ -4,7 +4,7 @@ import { renderNotes, renderConfig } from "./ui";
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let config: AppConfig = { relays: [], preferred_emojis: [] };
+let config: AppConfig = { relays: [], emoji_weights: [] };
 const notesMap = new Map<string, Note>();
 const reactionsByNote = new Map<string, Record<string, number>>();
 
@@ -35,7 +35,7 @@ async function loadData(): Promise<void> {
     for (const note of notes) notesMap.set(note.id, note);
   }
 
-  renderNotes(notesEl, notesMap, reactionsByNote, config.preferred_emojis);
+  renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights);
   setStatus(`${reactionsByNote.size} note(s) — last updated ${new Date().toLocaleTimeString()}`);
 }
 
@@ -59,8 +59,8 @@ function setupConfigHandlers(): void {
   document.getElementById("add-emoji")!.addEventListener("click", () => {
     const input = document.getElementById("emoji-input") as HTMLInputElement;
     const emoji = input.value.trim();
-    if (emoji && !config.preferred_emojis.includes(emoji)) {
-      config.preferred_emojis = [...config.preferred_emojis, emoji];
+    if (emoji && !config.emoji_weights.some((e) => e.emoji === emoji)) {
+      config.emoji_weights = [...config.emoji_weights, { emoji, weight: 50 }];
       renderConfig(config);
       input.value = "";
     }

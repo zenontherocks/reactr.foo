@@ -84,7 +84,15 @@ button.primary {
 }
 .config-item .config-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .config-item button { padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--muted); }
-.emoji-priority { color: var(--muted); font-size: 0.8rem; min-width: 2.5rem; }
+.emoji-slider-row { flex-wrap: nowrap; }
+.emoji-label { font-size: 1.2rem; min-width: 2rem; }
+.emoji-slider {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+  min-width: 80px;
+}
+.emoji-weight-value { color: var(--accent); font-size: 0.8rem; min-width: 2.5rem; text-align: right; font-variant-numeric: tabular-nums; }
 
 .input-row { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
 input {
