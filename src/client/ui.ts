@@ -1,4 +1,4 @@
-import type { Note, AppConfig } from "./api";
+import type { Note, AppConfig, EmojiWeight } from "./api";
 
 interface NoteDisplay {
   noteId: string;
@@ -10,16 +10,14 @@ interface NoteDisplay {
 
 /**
  * Compute a preference score for a note's reactions.
- * Each preferred emoji at index i contributes count * (n - i) to the score,
- * so emojis listed first have higher weight.
+ * Each emoji contributes count * weight, where weight is in [-100, 100].
  */
 export function computeScore(
   reactions: Record<string, number>,
-  preferred: string[]
+  weights: EmojiWeight[]
 ): number {
-  const n = preferred.length;
-  return preferred.reduce(
-    (sum, emoji, i) => sum + (reactions[emoji] ?? 0) * (n - i),
+  return weights.reduce(
+    (sum, { emoji, weight }) => sum + (reactions[emoji] ?? 0) * weight,
     0
   );
 }
@@ -32,7 +30,7 @@ export function renderNotes(
   container: HTMLElement,
   notesMap: Map<string, Note>,
   reactionsByNote: Map<string, Record<string, number>>,
-  preferred: string[]
+  preferred: EmojiWeight[]
 ): void {
   const notes: NoteDisplay[] = [];
 
@@ -131,20 +129,36 @@ function renderRelays(config: AppConfig): void {
 function renderEmojis(config: AppConfig): void {
   const list = document.getElementById("emoji-list")!;
   list.innerHTML = "";
-  config.preferred_emojis.forEach((emoji, i) => {
+  config.emoji_weights.forEach(({ emoji, weight }, i) => {
     const item = document.createElement("div");
-    item.className = "config-item";
+    item.className = "config-item emoji-slider-row";
     item.innerHTML = `
-      <span class="emoji-priority">#${i + 1}</span>
-      <span>${esc(emoji)}</span>
+      <span class="emoji-label">${esc(emoji)}</span>
+      <input
+        type="range"
+        class="emoji-slider"
+        min="-100"
+        max="100"
+        value="${weight}"
+        data-emoji-index="${i}"
+      />
+      <span class="emoji-weight-value">${weight}</span>
       <button data-remove-emoji="${esc(emoji)}">✕</button>
     `;
     list.appendChild(item);
   });
+  list.querySelectorAll<HTMLInputElement>(".emoji-slider").forEach((slider) => {
+    slider.addEventListener("input", () => {
+      const idx = Number(slider.dataset.emojiIndex);
+      const val = Number(slider.value);
+      config.emoji_weights[idx].weight = val;
+      slider.nextElementSibling!.textContent = String(val);
+    });
+  });
   list.querySelectorAll<HTMLElement>("[data-remove-emoji]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      config.preferred_emojis = config.preferred_emojis.filter(
-        (e) => e !== btn.dataset.removeEmoji
+      config.emoji_weights = config.emoji_weights.filter(
+        (e) => e.emoji !== btn.dataset.removeEmoji
       );
       renderEmojis(config);
     });
