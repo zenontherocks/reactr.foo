@@ -105,28 +105,6 @@ async function route(
   req: Request,
   env: Env
 ): Promise<Response> {
-  // GET /api/config
-  if (path === "/api/config" && method === "GET") {
-    const { results } = await env.DB.prepare(
-      "SELECT key, value FROM config"
-    ).all<{ key: string; value: string }>();
-    const out: Record<string, unknown> = {};
-    for (const row of results) out[row.key] = JSON.parse(row.value);
-    return json(out);
-  }
-
-  // POST /api/config
-  if (path === "/api/config" && method === "POST") {
-    const body = (await req.json()) as Record<string, unknown>;
-    const stmt = env.DB.prepare(
-      "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)"
-    );
-    for (const [key, value] of Object.entries(body)) {
-      await stmt.bind(key, JSON.stringify(value)).run();
-    }
-    return json({ ok: true });
-  }
-
   // GET /api/reactions  — returns all reaction IDs + metadata for dedup
   if (path === "/api/reactions" && method === "GET") {
     const { results } = await env.DB.prepare(

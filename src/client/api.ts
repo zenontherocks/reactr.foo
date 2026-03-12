@@ -20,25 +20,37 @@ export interface AppConfig {
   emoji_weights: EmojiWeight[];
 }
 
-export async function getConfig(): Promise<AppConfig> {
-  const res = await fetch("/api/config");
-  const raw = await res.json() as Record<string, unknown>;
-  // Backward compatibility: convert old preferred_emojis array to emoji_weights
-  if (!raw.emoji_weights && Array.isArray(raw.preferred_emojis)) {
-    raw.emoji_weights = (raw.preferred_emojis as string[]).map((emoji) => ({
-      emoji,
-      weight: 50,
-    }));
+const LS_KEY = "reactr.config";
+
+const DEFAULT_CONFIG: AppConfig = {
+  emoji_weights: [
+    { emoji: "👍", weight: 50 },
+    { emoji: "😂", weight: 50 },
+    { emoji: "🤙", weight: 50 },
+    { emoji: "❤️", weight: 50 },
+    { emoji: "🔥", weight: 50 },
+  ],
+};
+
+export function getConfig(): AppConfig {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return structuredClone(DEFAULT_CONFIG);
+    const parsed = JSON.parse(raw) as Partial<AppConfig>;
+    if (!Array.isArray(parsed.emoji_weights)) return structuredClone(DEFAULT_CONFIG);
+    return parsed as AppConfig;
+  } catch {
+    return structuredClone(DEFAULT_CONFIG);
   }
-  return raw as unknown as AppConfig;
 }
 
-export async function saveConfig(config: Partial<AppConfig>): Promise<void> {
-  await fetch("/api/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(config),
-  });
+export function saveConfig(config: Partial<AppConfig>): void {
+  try {
+    const current = getConfig();
+    localStorage.setItem(LS_KEY, JSON.stringify({ ...current, ...config }));
+  } catch {
+    // localStorage unavailable — in-memory state still works
+  }
 }
 
 export async function getReactionsByNote(): Promise<ReactionByNote[]> {

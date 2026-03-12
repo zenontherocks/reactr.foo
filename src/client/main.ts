@@ -59,8 +59,7 @@ function setupConfigHandlers(): void {
   });
 
   document.getElementById("save-config")!.addEventListener("click", async () => {
-    setStatus("Saving…");
-    await saveConfig(config);
+    saveConfig(config);
     await loadData();
   });
 
@@ -75,7 +74,7 @@ function setupConfigHandlers(): void {
 
 async function init(): Promise<void> {
   setStatus("Loading…");
-  config = await getConfig();
+  config = getConfig();
   renderConfig(config);
   setupConfigHandlers();
   notesEl.addEventListener("paginate", (e) => {
