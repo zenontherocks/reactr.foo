@@ -7,6 +7,7 @@ import { renderNotes, renderConfig } from "./ui";
 let config: AppConfig = { emoji_weights: [] };
 const notesMap = new Map<string, Note>();
 const reactionsByNote = new Map<string, Record<string, number>>();
+let currentPage = 0;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,8 @@ async function loadData(): Promise<void> {
     for (const note of notes) notesMap.set(note.id, note);
   }
 
-  renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights);
+  currentPage = 0;
+  renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
   setStatus(`${reactionsByNote.size} note(s) — last updated ${new Date().toLocaleTimeString()}`);
 }
 
@@ -76,6 +78,10 @@ async function init(): Promise<void> {
   config = await getConfig();
   renderConfig(config);
   setupConfigHandlers();
+  notesEl.addEventListener("paginate", (e) => {
+    currentPage = (e as CustomEvent<{ page: number }>).detail.page;
+    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
+  });
   await loadData();
   // Poll every 60s — the cron crawler feeds the DB, we just read it
   setInterval(loadData, 60_000);
