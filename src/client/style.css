@@ -92,7 +92,15 @@ button.primary {
   cursor: pointer;
   min-width: 80px;
 }
-.emoji-weight-value { color: var(--accent); font-size: 0.8rem; min-width: 2.5rem; text-align: right; font-variant-numeric: tabular-nums; }
+input.emoji-weight-value {
+  color: var(--accent);
+  font-size: 0.8rem;
+  width: 4rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  padding: 0.2rem 0.4rem;
+}
 
 .relay-list-static {
   list-style: none;

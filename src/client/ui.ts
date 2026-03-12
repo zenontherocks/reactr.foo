@@ -166,7 +166,14 @@ function renderEmojis(config: AppConfig): void {
         value="${weight}"
         data-emoji-index="${i}"
       />
-      <span class="emoji-weight-value">${weight}</span>
+      <input
+        type="number"
+        class="emoji-weight-value"
+        min="-100"
+        max="100"
+        value="${weight}"
+        data-emoji-index="${i}"
+      />
       <button data-remove-emoji="${esc(emoji)}">✕</button>
     `;
     list.appendChild(item);
@@ -176,7 +183,21 @@ function renderEmojis(config: AppConfig): void {
       const idx = Number(slider.dataset.emojiIndex);
       const val = Number(slider.value);
       config.emoji_weights[idx].weight = val;
-      slider.nextElementSibling!.textContent = String(val);
+      const numInput = list.querySelector<HTMLInputElement>(
+        `.emoji-weight-value[data-emoji-index="${idx}"]`
+      )!;
+      numInput.value = String(val);
+    });
+  });
+  list.querySelectorAll<HTMLInputElement>(".emoji-weight-value").forEach((numInput) => {
+    numInput.addEventListener("input", () => {
+      const idx = Number(numInput.dataset.emojiIndex);
+      const val = Math.max(-100, Math.min(100, Number(numInput.value)));
+      config.emoji_weights[idx].weight = val;
+      const slider = list.querySelector<HTMLInputElement>(
+        `.emoji-slider[data-emoji-index="${idx}"]`
+      )!;
+      slider.value = String(val);
     });
   });
   list.querySelectorAll<HTMLElement>("[data-remove-emoji]").forEach((btn) => {
