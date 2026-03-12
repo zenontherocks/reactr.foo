@@ -84,7 +84,7 @@ export function renderNotes(
       .join("");
 
     const contentHtml = note.content
-      ? `<p class="note-content">${esc(note.content)}</p>`
+      ? `<p class="note-content">${renderContent(note.content)}</p>`
       : `<p class="note-content note-loading">Fetching note content…</p>`;
 
     const timeHtml = note.created_at
@@ -150,6 +150,22 @@ function renderEmojis(config: AppConfig): void {
       renderEmojis(config);
     });
   });
+}
+
+function renderContent(content: string): string {
+  const URL_RE = /(https?:\/\/[^\s<>"]+)/g;
+  const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif)(\?[^\s]*)?$/i;
+  const parts = content.split(URL_RE);
+  return parts.map((part, i) => {
+    if (i % 2 === 1) {
+      // Odd indices are captured URL groups
+      if (IMAGE_EXT.test(part)) {
+        return `<img class="note-image" src="${esc(part)}" alt="image" loading="lazy">`;
+      }
+      return esc(part);
+    }
+    return esc(part);
+  }).join("");
 }
 
 function esc(s: string): string {
