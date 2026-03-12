@@ -26,13 +26,16 @@ export function computeScore(
 /**
  * Re-render the notes list, sorted by preference score descending.
  * Notes with reactions but no fetched content are shown with a placeholder.
+ * Returns the total number of pages.
  */
 export function renderNotes(
   container: HTMLElement,
   notesMap: Map<string, Note>,
   reactionsByNote: Map<string, Record<string, number>>,
-  preferred: EmojiWeight[]
-): void {
+  preferred: EmojiWeight[],
+  page: number = 0,
+  pageSize: number = 50
+): number {
   const notes: NoteDisplay[] = [];
 
   // Notes we have content for
@@ -62,13 +65,17 @@ export function renderNotes(
 
   notes.sort((a, b) => b.score - a.score || b.created_at - a.created_at);
 
+  const totalPages = Math.max(1, Math.ceil(notes.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageNotes = notes.slice(safePage * pageSize, (safePage + 1) * pageSize);
+
   container.innerHTML = "";
   if (notes.length === 0) {
     container.innerHTML = '<p class="empty">Waiting for reactions…</p>';
-    return;
+    return totalPages;
   }
 
-  for (const note of notes) {
+  for (const note of pageNotes) {
     const link = document.createElement("a");
     link.href = `https://iris.to/${nip19.noteEncode(note.noteId)}`;
     link.target = "_blank";
@@ -103,6 +110,36 @@ export function renderNotes(
     link.appendChild(el);
     container.appendChild(link);
   }
+
+  if (totalPages > 1) {
+    const nav = document.createElement("div");
+    nav.className = "pagination";
+
+    const prev = document.createElement("button");
+    prev.textContent = "← Prev";
+    prev.disabled = safePage === 0;
+    prev.addEventListener("click", () =>
+      container.dispatchEvent(new CustomEvent("paginate", { detail: { page: safePage - 1 } }))
+    );
+
+    const label = document.createElement("span");
+    label.className = "pagination-label";
+    label.textContent = `Page ${safePage + 1} of ${totalPages}`;
+
+    const next = document.createElement("button");
+    next.textContent = "Next →";
+    next.disabled = safePage === totalPages - 1;
+    next.addEventListener("click", () =>
+      container.dispatchEvent(new CustomEvent("paginate", { detail: { page: safePage + 1 } }))
+    );
+
+    nav.appendChild(prev);
+    nav.appendChild(label);
+    nav.appendChild(next);
+    container.appendChild(nav);
+  }
+
+  return totalPages;
 }
 
 /**
