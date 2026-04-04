@@ -1,6 +1,6 @@
 import { getConfig, saveConfig, getReactionsByNote, getNotes } from "./api";
 import type { AppConfig, Note } from "./api";
-import { renderNotes, renderConfig } from "./ui";
+import { renderNotes, renderConfig, computeScore } from "./ui";
 import { getAuth, onAuthChange, loginNip07, loginNsec, logout, hasNip07 } from "./auth";
 import { querySync, subscribe, destroyPool } from "./pool";
 import type { SubCloser, Event } from "./pool";
@@ -27,6 +27,23 @@ const notesMap = new Map<string, Note>();
 const reactionsByNote = new Map<string, Record<string, number>>();
 let currentPage = 0;
 let feedSub: SubCloser | null = null;
+
+function getSortedNoteIds(): string[] {
+  return [...reactionsByNote.keys()].sort((a, b) => {
+    const sa = computeScore(reactionsByNote.get(a) ?? {}, config.emoji_weights);
+    const sb = computeScore(reactionsByNote.get(b) ?? {}, config.emoji_weights);
+    return sb - sa;
+  });
+}
+
+async function ensureNotesForPage(page: number, pageSize = 50): Promise<void> {
+  const ids = getSortedNoteIds().slice(page * pageSize, (page + 1) * pageSize);
+  const missing = ids.filter((id) => !notesMap.has(id));
+  if (missing.length > 0) {
+    const notes = await getNotes(missing);
+    for (const note of notes) notesMap.set(note.id, note);
+  }
+}
 let globalSub: SubCloser | null = null;
 let contacts: string[] = [];
 
@@ -210,13 +227,8 @@ async function loadReactionsData(): Promise<void> {
     reactionsByNote.set(row.note_id, counts);
   }
 
-  const missingIds = [...reactionsByNote.keys()].filter((id) => !notesMap.has(id));
-  if (missingIds.length > 0) {
-    const notes = await getNotes(missingIds);
-    for (const note of notes) notesMap.set(note.id, note);
-  }
-
   currentPage = 0;
+  await ensureNotesForPage(0);
   renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
   setStatus(statusEl, `${reactionsByNote.size} note(s) — last updated ${new Date().toLocaleTimeString()}`);
 }
@@ -847,8 +859,9 @@ async function init(): Promise<void> {
   setupNotificationsView();
   updateAuthUI();
 
-  notesEl.addEventListener("paginate", (e) => {
+  notesEl.addEventListener("paginate", async (e) => {
     currentPage = (e as CustomEvent<{ page: number }>).detail.page;
+    await ensureNotesForPage(currentPage);
     renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
   });
 
