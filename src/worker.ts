@@ -188,6 +188,53 @@ async function route(
     return json(results);
   }
 
+  // GET /api/lnurl?url=<encoded>  — CORS proxy for LNURL-pay endpoints
+  if (path === "/api/lnurl" && method === "GET") {
+    const url = new URL(req.url);
+    const target = url.searchParams.get("url");
+    if (!target) return json({ error: "Missing url parameter" }, 400);
+    try {
+      const parsed = new URL(target);
+      if (parsed.protocol !== "https:") return json({ error: "HTTPS required" }, 400);
+    } catch {
+      return json({ error: "Invalid URL" }, 400);
+    }
+    const upstream = await fetch(target, {
+      headers: { Accept: "application/json" },
+    });
+    const body = await upstream.text();
+    return new Response(body, {
+      status: upstream.status,
+      headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+
+  // GET /api/og?url=<encoded>  — OpenGraph metadata proxy
+  if (path === "/api/og" && method === "GET") {
+    const url = new URL(req.url);
+    const target = url.searchParams.get("url");
+    if (!target) return json({ error: "Missing url parameter" }, 400);
+    try {
+      const upstream = await fetch(target, {
+        headers: { "User-Agent": "reactr.foo/1.0 (OpenGraph fetcher)" },
+        redirect: "follow",
+      });
+      const html = await upstream.text();
+      const og: Record<string, string> = {};
+      const metaRe = /<meta\s+(?:property|name)=["'](og:[^"']+)["']\s+content=["']([^"']*)["']/gi;
+      let m: RegExpExecArray | null;
+      while ((m = metaRe.exec(html)) !== null) {
+        og[m[1]] = m[2];
+      }
+      // Also try title tag as fallback
+      const titleMatch = /<title[^>]*>([^<]+)<\/title>/i.exec(html);
+      if (titleMatch && !og["og:title"]) og["og:title"] = titleMatch[1].trim();
+      return json(og);
+    } catch {
+      return json({ error: "Failed to fetch URL" }, 502);
+    }
+  }
+
   return json({ error: "Not Found" }, 404);
 }
 
