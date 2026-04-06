@@ -8,6 +8,7 @@
   --text: #e8e8ec;
   --muted: #888;
   --radius: 8px;
+  --danger: #e05555;
 }
 
 body {
@@ -32,6 +33,44 @@ header {
 
 h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
 
+.header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: monospace;
+}
+
+/* ── Navigation ─────────────────────────────────────── */
+#main-nav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#main-nav::-webkit-scrollbar { display: none; }
+
+.nav-link {
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.nav-link:hover { color: var(--text); }
+.nav-link.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* ── Buttons ─────────────────────────────────────────── */
 button {
   background: var(--surface);
@@ -49,6 +88,10 @@ button.primary {
   border-color: var(--accent);
   color: white;
   font-weight: 600;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Settings panel ──────────────────────────────────── */
@@ -125,6 +168,58 @@ input {
 }
 input:focus { outline: none; border-color: var(--accent); }
 
+/* ── Login modal ─────────────────────────────────────── */
+.modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal.hidden { display: none; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.7); }
+.modal-content {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  max-width: 420px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.modal-content h2 { font-size: 1.1rem; font-weight: 600; }
+
+.login-option { width: 100%; padding: 0.75rem; font-size: 0.95rem; }
+.login-divider {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  position: relative;
+}
+.login-divider span {
+  background: var(--surface);
+  padding: 0 0.75rem;
+  position: relative;
+  z-index: 1;
+}
+.login-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--border);
+}
+.login-warning { color: var(--danger); font-size: 0.8rem; margin-bottom: 0.25rem; }
+.login-cancel {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.login-cancel:hover { color: var(--text); }
+
+/* ── Views ───────────────────────────────────────────── */
+.view.hidden { display: none; }
+
 /* ── Main content ────────────────────────────────────── */
 main {
   max-width: 720px;
@@ -188,3 +283,121 @@ main {
 .emoji-count b { font-weight: 600; }
 
 .empty { color: var(--muted); text-align: center; padding: 4rem 0; }
+
+/* ── Feed note cards (for Following/Global views) ────── */
+.feed-note {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  transition: border-color 0.15s;
+}
+.feed-note:hover { border-color: var(--accent); }
+
+.feed-note-author {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+.feed-note-author img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.feed-note-author .author-name { font-weight: 600; }
+.feed-note-author .author-time { color: var(--muted); margin-left: auto; font-size: 0.75rem; }
+
+/* ── Pagination ──────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+.pagination-label { font-size: 0.8rem; color: var(--muted); }
+
+/* ── Note action bar ─────────────────────────────────── */
+.note-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+.action-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.action-btn:hover { color: var(--accent); border-color: var(--border); }
+.zap-btn:hover { color: #f7b731; }
+
+/* ── Avatar ──────────────────────────────────────────── */
+.avatar-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.author-avatar { text-decoration: none; }
+
+/* ── Compose area ────────────────────────────────────── */
+.compose-area {
+  margin-bottom: 1.5rem;
+}
+.compose-area textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+.compose-area textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Profile page ────────────────────────────────────── */
+.profile-card { margin-bottom: 1.5rem; }
+.profile-banner { margin: -1.5rem -1.5rem 1rem; overflow: hidden; max-height: 200px; }
+.profile-banner img { width: 100%; object-fit: cover; }
+.profile-info { display: flex; flex-direction: column; gap: 0.3rem; }
+.profile-avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid var(--accent); margin-bottom: 0.5rem; }
+.profile-nip05 { color: var(--accent); font-size: 0.85rem; }
+.profile-npub { color: var(--muted); font-size: 0.75rem; font-family: monospace; word-break: break-all; }
+.profile-about { font-size: 0.9rem; line-height: 1.5; margin-top: 0.5rem; }
+.profile-website a { color: var(--accent); font-size: 0.85rem; }
+.profile-ln { color: var(--muted); font-size: 0.8rem; font-family: monospace; }
+
+/* ── Links in notes ──────────────────────────────────── */
+.note-content a { color: var(--accent); text-decoration: none; word-break: break-all; }
+.note-content a:hover { text-decoration: underline; }
+
+/* ── Video in notes ──────────────────────────────────── */
+.note-content video {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--radius);
+  margin-top: 0.5rem;
+}

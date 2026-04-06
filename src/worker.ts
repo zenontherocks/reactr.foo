@@ -153,17 +153,11 @@ async function route(
     return json({ ok: true });
   }
 
-  // GET /api/reactions/by-note  — aggregated counts per note+emoji from nostr_events
+  // GET /api/reactions/by-note  — aggregated counts per note+emoji
   if (path === "/api/reactions/by-note" && method === "GET") {
     const { results } = await env.DB.prepare(
-      `SELECT
-         json_extract(t.value, '$[1]') AS note_id,
-         ne.content                    AS emoji,
-         COUNT(*)                      AS count
-       FROM nostr_events ne, json_each(ne.tags) AS t
-       WHERE ne.kind = 7
-         AND json_extract(t.value, '$[0]') = 'e'
-         AND json_extract(t.value, '$[1]') IS NOT NULL
+      `SELECT note_id, emoji, COUNT(*) AS count
+       FROM reaction_notes
        GROUP BY note_id, emoji
        ORDER BY note_id, count DESC`
     ).all();
@@ -186,6 +180,53 @@ async function route(
       .bind(...ids)
       .all();
     return json(results);
+  }
+
+  // GET /api/lnurl?url=<encoded>  — CORS proxy for LNURL-pay endpoints
+  if (path === "/api/lnurl" && method === "GET") {
+    const url = new URL(req.url);
+    const target = url.searchParams.get("url");
+    if (!target) return json({ error: "Missing url parameter" }, 400);
+    try {
+      const parsed = new URL(target);
+      if (parsed.protocol !== "https:") return json({ error: "HTTPS required" }, 400);
+    } catch {
+      return json({ error: "Invalid URL" }, 400);
+    }
+    const upstream = await fetch(target, {
+      headers: { Accept: "application/json" },
+    });
+    const body = await upstream.text();
+    return new Response(body, {
+      status: upstream.status,
+      headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+
+  // GET /api/og?url=<encoded>  — OpenGraph metadata proxy
+  if (path === "/api/og" && method === "GET") {
+    const url = new URL(req.url);
+    const target = url.searchParams.get("url");
+    if (!target) return json({ error: "Missing url parameter" }, 400);
+    try {
+      const upstream = await fetch(target, {
+        headers: { "User-Agent": "reactr.foo/1.0 (OpenGraph fetcher)" },
+        redirect: "follow",
+      });
+      const html = await upstream.text();
+      const og: Record<string, string> = {};
+      const metaRe = /<meta\s+(?:property|name)=["'](og:[^"']+)["']\s+content=["']([^"']*)["']/gi;
+      let m: RegExpExecArray | null;
+      while ((m = metaRe.exec(html)) !== null) {
+        og[m[1]] = m[2];
+      }
+      // Also try title tag as fallback
+      const titleMatch = /<title[^>]*>([^<]+)<\/title>/i.exec(html);
+      if (titleMatch && !og["og:title"]) og["og:title"] = titleMatch[1].trim();
+      return json(og);
+    } catch {
+      return json({ error: "Failed to fetch URL" }, 502);
+    }
   }
 
   return json({ error: "Not Found" }, 404);
@@ -307,6 +348,18 @@ async function onEvent(ws: WebSocket, env: Env, event: NostrEvent): Promise<void
   )
     .bind(event.id, event.pubkey, event.created_at, kind, tagsJson, event.content, event.sig)
     .run();
+
+  // For kind-7 reactions, also write to the denormalized reaction_notes index
+  if (kind === 7) {
+    const eTag = event.tags.find((t) => t[0] === "e");
+    if (eTag?.[1]) {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO reaction_notes (event_id, note_id, emoji) VALUES (?, ?, ?)`
+      )
+        .bind(event.id, eTag[1], event.content)
+        .run();
+    }
+  }
 
   send(ws, ["OK", event.id, true, ""]);
 }
@@ -481,12 +534,9 @@ async function haunt(env: Env): Promise<void> {
 
   // fetch notes that reactions reference but we don't have yet
   const { results: orphans } = await env.DB.prepare(
-    `SELECT DISTINCT json_extract(t.value, '$[1]') AS note_id
-     FROM nostr_events ne, json_each(ne.tags) AS t
-     WHERE ne.kind = 7
-       AND json_extract(t.value, '$[0]') = 'e'
-       AND json_extract(t.value, '$[1]') IS NOT NULL
-       AND json_extract(t.value, '$[1]') NOT IN (SELECT id FROM nostr_events WHERE kind = 1)
+    `SELECT DISTINCT note_id
+     FROM reaction_notes
+     WHERE note_id NOT IN (SELECT id FROM nostr_events WHERE kind = 1)
      LIMIT 200`
   ).all<{ note_id: string }>();
 
@@ -649,6 +699,18 @@ async function devour(phantoms: NostrEvent[], env: Env): Promise<number> {
     )
   );
 
-  await env.DB.batch(rituals);
+  // Also index kind-7 reactions into the denormalized reaction_notes table
+  const reactionRituals = verified.flatMap((soul) => {
+    if (soul.kind !== 7) return [];
+    const eTag = soul.tags.find((t) => t[0] === "e");
+    if (!eTag?.[1]) return [];
+    return [
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO reaction_notes (event_id, note_id, emoji) VALUES (?, ?, ?)`
+      ).bind(soul.id, eTag[1], soul.content),
+    ];
+  });
+
+  await env.DB.batch([...rituals, ...reactionRituals]);
   return verified.length;
 }

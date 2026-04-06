@@ -9,8 +9,20 @@
   <body>
     <header>
       <h1>reactr.foo</h1>
-      <button id="settings-toggle">⚙ Settings</button>
+      <div class="header-actions">
+        <button id="settings-toggle">Settings</button>
+        <button id="login-btn" class="primary">Log in</button>
+      </div>
     </header>
+
+    <nav id="main-nav">
+      <a href="#/" class="nav-link active" data-route="/">Reactions</a>
+      <a href="#/feed" class="nav-link" data-route="/feed">Following</a>
+      <a href="#/global" class="nav-link" data-route="/global">Global</a>
+      <a href="#/notifications" class="nav-link" data-route="/notifications">Notifications</a>
+      <a href="#/messages" class="nav-link" data-route="/messages">Messages</a>
+      <a href="#/search" class="nav-link" data-route="/search">Search</a>
+    </nav>
 
     <div id="settings" class="hidden">
       <div class="settings-inner">
@@ -31,10 +43,10 @@
 
         <section>
           <h2>Preferred Emojis</h2>
-          <p class="hint">Drag sliders to set preference weight. −100 = never show, 100 = favorite.</p>
+          <p class="hint">Drag sliders to set preference weight. -100 = never show, 100 = favorite.</p>
           <div id="emoji-list"></div>
           <div class="input-row">
-            <input id="emoji-input" type="text" placeholder="Paste emoji…" />
+            <input id="emoji-input" type="text" placeholder="Paste emoji..." />
             <button id="add-emoji">Add</button>
           </div>
         </section>
@@ -43,9 +55,72 @@
       </div>
     </div>
 
+    <!-- Login modal -->
+    <div id="login-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <h2>Log in to Nostr</h2>
+        <button id="login-nip07" class="primary login-option">Use browser extension (NIP-07)</button>
+        <div class="login-divider"><span>or</span></div>
+        <div class="login-nsec-section">
+          <p class="hint login-warning">Pasting your private key is risky. Use a browser extension instead if possible.</p>
+          <div class="input-row">
+            <input id="nsec-input" type="password" placeholder="nsec1... or hex private key" />
+            <button id="login-nsec">Log in</button>
+          </div>
+        </div>
+        <button id="login-cancel" class="login-cancel">Cancel</button>
+      </div>
+    </div>
+
     <main>
-      <p id="status" class="status"></p>
-      <div id="notes"></div>
+      <!-- View: Reactions (default home) -->
+      <div id="view-reactions" class="view">
+        <p id="status" class="status"></p>
+        <div id="notes"></div>
+      </div>
+
+      <!-- View: Following feed -->
+      <div id="view-feed" class="view hidden">
+        <p id="feed-status" class="status"></p>
+        <div id="feed-notes"></div>
+      </div>
+
+      <!-- View: Global feed -->
+      <div id="view-global" class="view hidden">
+        <p id="global-status" class="status"></p>
+        <div id="global-notes"></div>
+      </div>
+
+      <!-- View: Notifications -->
+      <div id="view-notifications" class="view hidden">
+        <p class="status">Log in to see notifications.</p>
+      </div>
+
+      <!-- View: Messages -->
+      <div id="view-messages" class="view hidden">
+        <p class="status">Log in to see messages.</p>
+      </div>
+
+      <!-- View: Search -->
+      <div id="view-search" class="view hidden">
+        <div class="input-row" style="margin-bottom: 1rem;">
+          <input id="search-input" type="text" placeholder="Search notes, users, hashtags..." />
+          <button id="search-btn">Search</button>
+        </div>
+        <div id="search-results"></div>
+      </div>
+
+      <!-- View: Note thread -->
+      <div id="view-note" class="view hidden">
+        <div id="note-thread"></div>
+      </div>
+
+      <!-- View: Profile -->
+      <div id="view-profile" class="view hidden">
+        <div id="profile-header"></div>
+        <div id="profile-notes"></div>
+      </div>
     </main>
 
     <script type="module" src="/src/client/main.ts"></script>
