@@ -3,6 +3,7 @@ import { verifyEvent } from "nostr-tools";
 
 export interface Env {
   DB: D1Database;
+  ASSETS: Fetcher;
 }
 
 const CORS = {
@@ -84,7 +85,7 @@ export default {
     const { pathname } = new URL(request.url);
 
     if (!pathname.startsWith("/api/")) {
-      return new Response("Not Found", { status: 404 });
+      return env.ASSETS.fetch(request);
     }
 
     try {
