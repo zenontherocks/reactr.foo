@@ -1,5 +1,6 @@
 import { nip19 } from "nostr-tools";
-import type { Note, AppConfig, EmojiWeight } from "./api";
+import type { AppConfig, EmojiWeight } from "./api";
+import type { Event } from "./pool";
 
 interface NoteDisplay {
   noteId: string;
@@ -30,7 +31,7 @@ export function computeScore(
  */
 export function renderNotes(
   container: HTMLElement,
-  notesMap: Map<string, Note>,
+  notesMap: Map<string, Event>,
   reactionsByNote: Map<string, Record<string, number>>,
   preferred: EmojiWeight[],
   page: number = 0,

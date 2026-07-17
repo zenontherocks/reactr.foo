@@ -11,7 +11,7 @@
       <h1>reactr.foo</h1>
       <div class="header-actions">
         <button id="settings-toggle">Settings</button>
-        <button id="login-btn" class="primary">Log in</button>
+        <button id="account-btn" class="primary">Account</button>
       </div>
     </header>
 
@@ -27,18 +27,13 @@
     <div id="settings" class="hidden">
       <div class="settings-inner">
         <section>
-          <h2>Upstream Relays</h2>
-          <p class="hint">The database pulls from the reactr.foo relay, which itself pulls from these relays:</p>
-          <ul class="relay-list-static">
-            <li>wss://relay.damus.io</li>
-            <li>wss://relay.nostr.band</li>
-            <li>wss://nos.lol</li>
-            <li>wss://relay.snort.social</li>
-            <li>wss://purplepag.es</li>
-            <li>wss://relay.primal.net</li>
-            <li>wss://nostr.wine</li>
-            <li>wss://nostr.mom</li>
-          </ul>
+          <h2>Your Relays</h2>
+          <p class="hint">Your browser connects directly to these relays for notes, reactions, and profile lookups — this list lives only in this browser.</p>
+          <div id="relay-list"></div>
+          <div class="input-row">
+            <input id="relay-input" type="text" placeholder="wss://relay.example.com" />
+            <button id="add-relay">Add</button>
+          </div>
         </section>
 
         <section>
@@ -55,21 +50,28 @@
       </div>
     </div>
 
-    <!-- Login modal -->
-    <div id="login-modal" class="modal hidden">
+    <!-- Account switcher -->
+    <div id="account-panel" class="modal hidden">
       <div class="modal-backdrop"></div>
       <div class="modal-content">
-        <h2>Log in to Nostr</h2>
-        <button id="login-nip07" class="primary login-option">Use browser extension (NIP-07)</button>
-        <div class="login-divider"><span>or</span></div>
-        <div class="login-nsec-section">
-          <p class="hint login-warning">Pasting your private key is risky. Use a browser extension instead if possible.</p>
-          <div class="input-row">
-            <input id="nsec-input" type="password" placeholder="nsec1... or hex private key" />
-            <button id="login-nsec">Log in</button>
+        <h2>Accounts</h2>
+        <p class="hint">Identities live only in this browser. Nothing is ever sent to reactr.foo's server.</p>
+        <div id="account-list"></div>
+
+        <div class="account-add-actions">
+          <button id="account-generate" class="primary login-option">+ New pseudonymous account</button>
+          <div class="login-divider"><span>or</span></div>
+          <button id="account-nip07" class="login-option">Use browser extension (NIP-07)</button>
+          <div class="login-nsec-section">
+            <p class="hint login-warning">Pasting your private key is risky. Use a browser extension instead if possible.</p>
+            <div class="input-row">
+              <input id="nsec-input" type="password" placeholder="nsec1... or hex private key" />
+              <button id="account-import">Import</button>
+            </div>
           </div>
         </div>
-        <button id="login-cancel" class="login-cancel">Cancel</button>
+
+        <button id="account-close" class="login-cancel">Close</button>
       </div>
     </div>
 

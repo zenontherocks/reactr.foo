@@ -128,61 +128,6 @@ async function route(
     return json({ ok: true });
   }
 
-  // GET /api/reactions  — returns all reaction IDs + metadata for dedup
-  if (path === "/api/reactions" && method === "GET") {
-    const { results } = await env.DB.prepare(
-      "SELECT id, emoji, npub, note_id, relay, created_at FROM reactions ORDER BY created_at DESC LIMIT 5000"
-    ).all();
-    return json(results);
-  }
-
-  // POST /api/reactions  — log a single reaction
-  if (path === "/api/reactions" && method === "POST") {
-    const body = (await req.json()) as {
-      id: string;
-      emoji: string;
-      npub: string;
-      note_id: string;
-      relay: string;
-      created_at: number;
-    };
-    await env.DB.prepare(
-      "INSERT OR IGNORE INTO reactions (id, emoji, npub, note_id, relay, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-    )
-      .bind(body.id, body.emoji, body.npub, body.note_id, body.relay, body.created_at)
-      .run();
-    return json({ ok: true });
-  }
-
-  // GET /api/reactions/by-note  — aggregated counts per note+emoji
-  if (path === "/api/reactions/by-note" && method === "GET") {
-    const { results } = await env.DB.prepare(
-      `SELECT note_id, emoji, COUNT(*) AS count
-       FROM reaction_notes
-       GROUP BY note_id, emoji
-       ORDER BY note_id, count DESC`
-    ).all();
-    return json(results);
-  }
-
-  // GET /api/notes?ids=id1,id2,...  — fetch kind-1 note content from nostr_events
-  if (path === "/api/notes" && method === "GET") {
-    const url = new URL(req.url);
-    const ids = (url.searchParams.get("ids") ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 90); // D1 bind param limit
-    if (ids.length === 0) return json([]);
-    const ph = placeholders(ids.length);
-    const { results } = await env.DB.prepare(
-      `SELECT id, content, created_at, pubkey FROM nostr_events WHERE kind = 1 AND id IN (${ph})`
-    )
-      .bind(...ids)
-      .all();
-    return json(results);
-  }
-
   // GET /api/lnurl?url=<encoded>  — CORS proxy for LNURL-pay endpoints
   if (path === "/api/lnurl" && method === "GET") {
     const url = new URL(req.url);

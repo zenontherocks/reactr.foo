@@ -145,17 +145,6 @@ input.emoji-weight-value {
   padding: 0.2rem 0.4rem;
 }
 
-.relay-list-static {
-  list-style: none;
-  font-size: 0.85rem;
-  font-family: monospace;
-  color: var(--muted);
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin-top: 0.25rem;
-}
-
 .input-row { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
 input {
   flex: 1;
@@ -208,6 +197,36 @@ input:focus { outline: none; border-color: var(--accent); }
   border-top: 1px solid var(--border);
 }
 .login-warning { color: var(--danger); font-size: 0.8rem; margin-bottom: 0.25rem; }
+
+/* ── Account switcher ────────────────────────────────── */
+#account-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem;
+}
+.account-row.active { border-color: var(--accent); }
+.account-switch {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  background: transparent;
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+}
+.account-name { font-size: 0.9rem; }
+.account-method { font-size: 0.7rem; color: var(--muted); }
+.account-export, .account-remove {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.account-add-actions { display: flex; flex-direction: column; gap: 0.75rem; }
 .login-cancel {
   align-self: center;
   background: transparent;

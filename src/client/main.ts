@@ -1,8 +1,21 @@
-import { getConfig, saveConfig, getReactionsByNote, getNotes } from "./api";
-import type { AppConfig, Note } from "./api";
+import { getConfig, saveConfig } from "./api";
+import type { AppConfig } from "./api";
 import { renderNotes, renderConfig, computeScore } from "./ui";
-import { getAuth, onAuthChange, loginNip07, loginNsec, logout, hasNip07 } from "./auth";
-import { querySync, subscribe, destroyPool } from "./pool";
+import {
+  getAuth,
+  onAuthChange,
+  hasNip07,
+  ensureBootstrapped,
+  getAccounts,
+  getActiveAccountId,
+  switchAccount,
+  generateAccount,
+  importNsec,
+  connectNip07,
+  removeAccount,
+  exportNsec,
+} from "./auth";
+import { querySync, subscribe, getRelays, setRelays } from "./pool";
 import type { SubCloser, Event } from "./pool";
 import { addRoute, startRouter, onNavigate, navigate, currentPath } from "./router";
 import { nip19 } from "nostr-tools";
@@ -16,6 +29,7 @@ import {
   onNotifications,
   getUnreadCount,
   markAllRead,
+  getNotifications,
 } from "./notifications";
 import { fetchNip04Messages, groupConversations, decryptNip04, sendNip04Message } from "./dm";
 import type { Profile } from "./profile";
@@ -23,7 +37,7 @@ import type { Profile } from "./profile";
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let config: AppConfig = { emoji_weights: [] };
-const notesMap = new Map<string, Note>();
+const notesMap = new Map<string, Event>();
 const reactionsByNote = new Map<string, Record<string, number>>();
 let currentPage = 0;
 let feedSub: SubCloser | null = null;
@@ -40,7 +54,7 @@ async function ensureNotesForPage(page: number, pageSize = 50): Promise<void> {
   const ids = getSortedNoteIds().slice(page * pageSize, (page + 1) * pageSize);
   const missing = ids.filter((id) => !notesMap.has(id));
   if (missing.length > 0) {
-    const notes = await getNotes(missing);
+    const notes = await querySync({ ids: missing, kinds: [1] });
     for (const note of notes) notesMap.set(note.id, note);
   }
 }
@@ -51,8 +65,9 @@ let contacts: string[] = [];
 
 const notesEl = document.getElementById("notes")!;
 const statusEl = document.getElementById("status")!;
-const loginBtn = document.getElementById("login-btn")!;
-const loginModal = document.getElementById("login-modal")!;
+const accountBtn = document.getElementById("account-btn")!;
+const accountPanel = document.getElementById("account-panel")!;
+const accountListEl = document.getElementById("account-list")!;
 const notifNav = document.querySelector('.nav-link[data-route="/notifications"]')!;
 
 function setStatus(el: HTMLElement, msg: string): void {
@@ -217,20 +232,39 @@ async function renderFeedList(container: HTMLElement, events: Event[]): Promise<
 
 // ── Reactions view (existing, default) ────────────────────────────────────────
 
-async function loadReactionsData(): Promise<void> {
-  const byNote = await getReactionsByNote();
+let reactionsSub: SubCloser | null = null;
+let reactionsRenderTimer: ReturnType<typeof setTimeout> | null = null;
 
+function scheduleReactionsRender(): void {
+  if (reactionsRenderTimer) return;
+  reactionsRenderTimer = setTimeout(async () => {
+    reactionsRenderTimer = null;
+    await ensureNotesForPage(currentPage);
+    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
+    setStatus(statusEl, `${reactionsByNote.size} note(s) — live`);
+  }, 400);
+}
+
+function startReactionsSubscription(): void {
+  stopReactionsSubscription();
   reactionsByNote.clear();
-  for (const row of byNote) {
-    const counts = reactionsByNote.get(row.note_id) ?? {};
-    counts[row.emoji] = row.count;
-    reactionsByNote.set(row.note_id, counts);
-  }
-
   currentPage = 0;
-  await ensureNotesForPage(0);
-  renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
-  setStatus(statusEl, `${reactionsByNote.size} note(s) — last updated ${new Date().toLocaleTimeString()}`);
+  setStatus(statusEl, "Loading reactions...");
+
+  reactionsSub = subscribe({ kinds: [7], limit: 500 }, (event) => {
+    const eTag = event.tags.find((t) => t[0] === "e");
+    const noteId = eTag?.[1];
+    if (!noteId || !event.content) return;
+    const counts = reactionsByNote.get(noteId) ?? {};
+    counts[event.content] = (counts[event.content] ?? 0) + 1;
+    reactionsByNote.set(noteId, counts);
+    scheduleReactionsRender();
+  });
+}
+
+function stopReactionsSubscription(): void {
+  if (reactionsSub) { reactionsSub.close(); reactionsSub = null; }
+  if (reactionsRenderTimer) { clearTimeout(reactionsRenderTimer); reactionsRenderTimer = null; }
 }
 
 // ── Feed view (Following) ─────────────────────────────────────────────────────
@@ -480,7 +514,6 @@ function renderNotificationsView(): void {
     return;
   }
 
-  const { getNotifications } = require("./notifications") as typeof import("./notifications");
   const notifs = getNotifications();
 
   if (notifs.length === 0) {
@@ -689,74 +722,148 @@ function renderComposeBox(container: HTMLElement): void {
   });
 }
 
-// ── Auth UI ───────────────────────────────────────────────────────────────────
+// ── Account UI ────────────────────────────────────────────────────────────────
+
+function accountLabel(a: { label?: string; npub: string }): string {
+  return a.label?.trim() || `${a.npub.slice(0, 10)}…`;
+}
+
+function renderAccountList(): void {
+  const accounts = getAccounts();
+  const activeId = getActiveAccountId();
+  accountListEl.innerHTML = "";
+
+  for (const acc of accounts) {
+    const row = document.createElement("div");
+    row.className = "account-row" + (acc.id === activeId ? " active" : "");
+    row.innerHTML = `
+      <button class="account-switch" data-id="${esc(acc.id)}">
+        <span class="account-name">${esc(accountLabel(acc))}</span>
+        <span class="account-method">${acc.method === "nip07" ? "extension" : "local key"}</span>
+      </button>
+      ${acc.method === "nsec" ? `<button class="account-export" data-id="${esc(acc.id)}" title="Export nsec">Export</button>` : ""}
+      <button class="account-remove" data-id="${esc(acc.id)}" title="Remove account">✕</button>
+    `;
+    accountListEl.appendChild(row);
+  }
+
+  accountListEl.querySelectorAll<HTMLButtonElement>(".account-switch").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      switchAccount(btn.dataset.id!);
+      accountPanel.classList.add("hidden");
+    });
+  });
+
+  accountListEl.querySelectorAll<HTMLButtonElement>(".account-export").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      try {
+        const nsec = exportNsec(btn.dataset.id!);
+        prompt(
+          "Copy this nsec and store it somewhere safe — it's the only way to recover this identity:",
+          nsec
+        );
+      } catch (err) {
+        alert(String(err));
+      }
+    });
+  });
+
+  accountListEl.querySelectorAll<HTMLButtonElement>(".account-remove").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (confirm("Remove this account? Make sure you've exported its nsec if you want to use it again.")) {
+        await removeAccount(btn.dataset.id!);
+        renderAccountList();
+      }
+    });
+  });
+}
 
 function updateAuthUI(): void {
   const auth = getAuth();
+  const active = getAccounts().find((a) => a.id === getActiveAccountId());
+  accountBtn.textContent = active ? accountLabel(active) : "Account";
+
   if (auth.pubkey) {
-    loginBtn.textContent = "Log out";
-    loginBtn.classList.remove("primary");
-    // Start notifications
     startNotificationSubscription(auth.pubkey);
-    // Fetch contacts
-    fetchContactList(auth.pubkey).then((c) => { contacts = c; });
+    fetchContactList(auth.pubkey).then((c) => {
+      contacts = c;
+      if (currentPath().startsWith("/feed")) startFeedSubscription();
+    });
   } else {
-    loginBtn.textContent = "Log in";
-    loginBtn.classList.add("primary");
     stopNotificationSubscription();
     contacts = [];
   }
+
+  if (accountPanel && !accountPanel.classList.contains("hidden")) renderAccountList();
 }
 
 function setupAuthHandlers(): void {
-  loginBtn.addEventListener("click", () => {
-    const auth = getAuth();
-    if (auth.pubkey) {
-      logout();
-      stopFeedSubscription();
-      stopGlobalSubscription();
-      stopNotificationSubscription();
-      destroyPool();
-    } else {
-      loginModal.classList.remove("hidden");
-      const nip07Btn = document.getElementById("login-nip07") as HTMLButtonElement;
-      nip07Btn.disabled = !hasNip07();
-      nip07Btn.textContent = hasNip07() ? "Use browser extension (NIP-07)" : "No extension detected";
-    }
+  accountBtn.addEventListener("click", () => {
+    renderAccountList();
+    const nip07Btn = document.getElementById("account-nip07") as HTMLButtonElement;
+    nip07Btn.disabled = !hasNip07();
+    nip07Btn.textContent = hasNip07() ? "Use browser extension (NIP-07)" : "No extension detected";
+    accountPanel.classList.remove("hidden");
   });
 
-  document.getElementById("login-nip07")!.addEventListener("click", async () => {
+  document.getElementById("account-generate")!.addEventListener("click", async () => {
+    await generateAccount();
+    accountPanel.classList.add("hidden");
+  });
+
+  document.getElementById("account-nip07")!.addEventListener("click", async () => {
     try {
-      await loginNip07();
-      loginModal.classList.add("hidden");
+      await connectNip07();
+      accountPanel.classList.add("hidden");
     } catch (err) {
       alert((err as Error).message);
     }
   });
 
-  document.getElementById("login-nsec")!.addEventListener("click", async () => {
+  document.getElementById("account-import")!.addEventListener("click", async () => {
     const input = document.getElementById("nsec-input") as HTMLInputElement;
     try {
-      await loginNsec(input.value.trim());
+      await importNsec(input.value.trim());
       input.value = "";
-      loginModal.classList.add("hidden");
+      accountPanel.classList.add("hidden");
     } catch (err) {
       alert((err as Error).message);
     }
   });
 
-  document.getElementById("login-cancel")!.addEventListener("click", () => {
-    loginModal.classList.add("hidden");
+  document.getElementById("account-close")!.addEventListener("click", () => {
+    accountPanel.classList.add("hidden");
   });
 
-  document.querySelector(".modal-backdrop")!.addEventListener("click", () => {
-    loginModal.classList.add("hidden");
+  accountPanel.querySelector(".modal-backdrop")!.addEventListener("click", () => {
+    accountPanel.classList.add("hidden");
   });
 
   onAuthChange(updateAuthUI);
 }
 
 // ── Config UI wiring ──────────────────────────────────────────────────────────
+
+function renderRelayList(): void {
+  const list = document.getElementById("relay-list")!;
+  list.innerHTML = "";
+  getRelays().forEach((relay, i) => {
+    const item = document.createElement("div");
+    item.className = "config-item";
+    item.innerHTML = `
+      <span class="config-label">${esc(relay)}</span>
+      <button data-remove-relay-index="${i}">✕</button>
+    `;
+    list.appendChild(item);
+  });
+  list.querySelectorAll<HTMLButtonElement>("[data-remove-relay-index]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.removeRelayIndex);
+      setRelays(getRelays().filter((_, i) => i !== idx));
+      renderRelayList();
+    });
+  });
+}
 
 function setupConfigHandlers(): void {
   document.getElementById("settings-toggle")!.addEventListener("click", () => {
@@ -776,7 +883,8 @@ function setupConfigHandlers(): void {
   document.getElementById("save-config")!.addEventListener("click", async () => {
     setStatus(statusEl, "Saving...");
     await saveConfig(config);
-    await loadReactionsData();
+    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
+    setStatus(statusEl, `${reactionsByNote.size} note(s) — live`);
   });
 
   document.getElementById("emoji-input")!.addEventListener("keydown", (e) => {
@@ -784,6 +892,27 @@ function setupConfigHandlers(): void {
       document.getElementById("add-emoji")!.click();
     }
   });
+
+  document.getElementById("add-relay")!.addEventListener("click", () => {
+    const input = document.getElementById("relay-input") as HTMLInputElement;
+    const url = input.value.trim();
+    if (!url) return;
+    if (!url.startsWith("wss://") && !url.startsWith("ws://")) {
+      alert("Relay URL must start with wss:// or ws://");
+      return;
+    }
+    setRelays([...getRelays(), url]);
+    renderRelayList();
+    input.value = "";
+  });
+
+  document.getElementById("relay-input")!.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      document.getElementById("add-relay")!.click();
+    }
+  });
+
+  renderRelayList();
 }
 
 // ── Routing ───────────────────────────────────────────────────────────────────
@@ -791,7 +920,7 @@ function setupConfigHandlers(): void {
 function setupRoutes(): void {
   addRoute("/", () => {
     showView("view-reactions");
-    loadReactionsData();
+    startReactionsSubscription();
   });
 
   addRoute("/feed", () => {
@@ -844,6 +973,7 @@ function setupRoutes(): void {
     updateNavActive(simplePath === "/" ? "/" : simplePath);
     if (simplePath !== "/feed") stopFeedSubscription();
     if (simplePath !== "/global") stopGlobalSubscription();
+    if (simplePath !== "/") stopReactionsSubscription();
   });
 }
 
@@ -851,6 +981,7 @@ function setupRoutes(): void {
 
 async function init(): Promise<void> {
   setStatus(statusEl, "Loading...");
+  await ensureBootstrapped();
   config = await getConfig();
   renderConfig(config);
   setupConfigHandlers();
@@ -867,10 +998,6 @@ async function init(): Promise<void> {
 
   setupRoutes();
   startRouter();
-
-  setInterval(() => {
-    if (currentPath() === "/") loadReactionsData();
-  }, 60_000);
 }
 
 init().catch((err) => {

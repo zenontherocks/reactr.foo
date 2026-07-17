@@ -1,4 +1,4 @@
-import { getAuth, signEvent } from "./auth";
+import { getAuth, signEvent, getActiveMethod, getActivePrivkeyHex } from "./auth";
 import { querySync, publish } from "./pool";
 import type { Event } from "./pool";
 
@@ -19,11 +19,29 @@ export async function fetchNip04Messages(pubkey: string): Promise<Event[]> {
 }
 
 /**
- * Decrypt a NIP-04 message using the browser extension.
+ * Decrypt a NIP-04 message: via the browser extension for nip07 accounts,
+ * or locally with nostr-tools for nsec accounts.
  */
 export async function decryptNip04(peerPubkey: string, ciphertext: string): Promise<string> {
-  if (!window.nostr?.nip04) throw new Error("NIP-04 decryption not supported by extension");
-  return window.nostr.nip04.decrypt(peerPubkey, ciphertext);
+  if (getActiveMethod() === "nip07") {
+    if (!window.nostr?.nip04) throw new Error("NIP-04 decryption not supported by extension");
+    return window.nostr.nip04.decrypt(peerPubkey, ciphertext);
+  }
+  const { decrypt } = await import("nostr-tools/nip04");
+  return decrypt(getActivePrivkeyHex(), peerPubkey, ciphertext);
+}
+
+/**
+ * Encrypt a NIP-04 message: via the browser extension for nip07 accounts,
+ * or locally with nostr-tools for nsec accounts.
+ */
+async function encryptNip04(recipientPubkey: string, plaintext: string): Promise<string> {
+  if (getActiveMethod() === "nip07") {
+    if (!window.nostr?.nip04) throw new Error("NIP-04 encryption not supported by extension");
+    return window.nostr.nip04.encrypt(recipientPubkey, plaintext);
+  }
+  const { encrypt } = await import("nostr-tools/nip04");
+  return encrypt(getActivePrivkeyHex(), recipientPubkey, plaintext);
 }
 
 /**
@@ -32,9 +50,8 @@ export async function decryptNip04(peerPubkey: string, ciphertext: string): Prom
 export async function sendNip04Message(recipientPubkey: string, plaintext: string): Promise<Event> {
   const auth = getAuth();
   if (!auth.pubkey) throw new Error("Not logged in");
-  if (!window.nostr?.nip04) throw new Error("NIP-04 encryption not supported by extension");
 
-  const ciphertext = await window.nostr.nip04.encrypt(recipientPubkey, plaintext);
+  const ciphertext = await encryptNip04(recipientPubkey, plaintext);
 
   const event = await signEvent({
     kind: 4,
@@ -161,15 +178,3 @@ function randomTimestamp(): number {
   return now - Math.floor(Math.random() * 172800);
 }
 
-// ── NIP-04 type extension for window.nostr ───────────────────────────────────
-
-declare global {
-  interface Window {
-    nostr?: Window["nostr"] & {
-      nip04?: {
-        encrypt(pubkey: string, plaintext: string): Promise<string>;
-        decrypt(pubkey: string, ciphertext: string): Promise<string>;
-      };
-    };
-  }
-}
