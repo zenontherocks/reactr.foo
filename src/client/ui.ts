@@ -105,8 +105,8 @@ export function renderNotes(
         ${timeHtml}
         <span class="note-id" title="${esc(note.noteId)}">${esc(note.noteId.slice(0, 16))}…</span>
       </div>
-      ${contentHtml}
       <div class="note-reactions">${reactionHtml || "—"}</div>
+      ${contentHtml}
     `;
     link.appendChild(el);
     container.appendChild(link);

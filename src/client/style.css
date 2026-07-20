@@ -330,7 +330,7 @@ main {
   margin-top: 0.5rem;
 }
 
-.note-reactions { display: flex; flex-wrap: wrap; gap: 0.4rem; font-size: 0.85rem; }
+.note-reactions { display: flex; flex-wrap: wrap; gap: 0.4rem; font-size: 0.85rem; margin-bottom: 0.75rem; }
 .emoji-count {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -371,6 +371,8 @@ main {
 /* ── Snap-scroll feeds: one post fills the screen; scrolling jumps
    straight to the next rather than scrolling smoothly ──────────── */
 .snap-feed {
+  position: relative; /* makes .snap-post children's offsetTop relative to this
+                          container's own scroll coordinates, not the page */
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   scroll-behavior: auto;

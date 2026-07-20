@@ -89,6 +89,47 @@ function fitVisibleSnapFeeds(): void {
   });
 }
 
+// When scrolling back UP into a post taller than the screen (e.g. one with
+// several images), land on its bottom instead of its top — resuming right
+// where you'd naturally scroll forward again, instead of dumping you back at
+// the start of a long post you've already seen.
+function setupDirectionalSnap(container: HTMLElement): void {
+  let lastTop = container.scrollTop;
+  let scrollingUp = false;
+
+  container.addEventListener(
+    "scroll",
+    () => {
+      const top = container.scrollTop;
+      if (top !== lastTop) scrollingUp = top < lastTop;
+      lastTop = top;
+    },
+    { passive: true }
+  );
+
+  container.addEventListener("scrollend", () => {
+    if (!scrollingUp) return;
+
+    const containerHeight = container.clientHeight;
+    const scrollTop = container.scrollTop;
+    let target: HTMLElement | null = null;
+    for (const post of container.querySelectorAll<HTMLElement>(".snap-post")) {
+      if (post.offsetTop <= scrollTop + 1) target = post;
+      else break;
+    }
+    if (!target) return;
+
+    // Every post is at least one screen tall (min-height: 100%); only ones
+    // with more content than that actually overflow past a single screen.
+    if (target.offsetHeight <= containerHeight + 1) return;
+
+    const bottomAlignedTop = target.offsetTop + target.offsetHeight - containerHeight;
+    if (Math.abs(container.scrollTop - bottomAlignedTop) > 1) {
+      container.scrollTop = bottomAlignedTop;
+    }
+  });
+}
+
 window.addEventListener("resize", fitVisibleSnapFeeds);
 
 // ── Views ─────────────────────────────────────────────────────────────────────
@@ -1006,6 +1047,7 @@ function setupRoutes(): void {
 async function init(): Promise<void> {
   setStatus(statusEl, "Loading...");
   await ensureBootstrapped();
+  document.querySelectorAll<HTMLElement>(".snap-feed").forEach(setupDirectionalSnap);
   config = await getConfig();
   renderConfig(config);
   setupConfigHandlers();
