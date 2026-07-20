@@ -432,6 +432,7 @@ function send(ws: WebSocket, msg: unknown[]): void {
 const HUNTED_KINDS = [1, 7]; // text notes and reactions — the wraith's diet
 const SOULS_PER_RELAY = 500; // max events siphoned per relay per haunt
 const SEEP_TIMEOUT_MS = 20_000; // how long the wraith lingers before vanishing
+const RETENTION_DAYS = 30; // how long a soul lingers in the crypt before it's laid to rest
 
 async function haunt(env: Env): Promise<void> {
   // read the coven's relay list from config
@@ -503,6 +504,41 @@ async function haunt(env: Env): Promise<void> {
   }
 
   console.log(`🕸️ [HAUNT] crypt swells by ${totalSouls} soul(s). the wraith rests.`);
+
+  // the crypt isn't infinite — old souls are laid to rest to make room
+  try {
+    await layToRest(env);
+  } catch (err) {
+    console.error(`💀 [HAUNT] burial rites failed: ${String(err)}`);
+  }
+}
+
+// layToRest — deletes old notes and reactions (and their reaction index entries).
+// Scoped to HUNTED_KINDS only: replaceable events (profiles, contact lists, etc.)
+// already keep just one row per pubkey+kind via onEvent, so they're never "stale"
+// the way an old note or reaction is — pruning by age would erase a quiet user's
+// only profile row instead of decaying content.
+async function layToRest(env: Env): Promise<void> {
+  const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
+
+  // reaction_notes rows must go first — they reference nostr_events by id
+  const reactionResult = await env.DB.prepare(
+    `DELETE FROM reaction_notes
+     WHERE event_id IN (SELECT id FROM nostr_events WHERE kind = 7 AND created_at < ?)`
+  )
+    .bind(cutoff)
+    .run();
+
+  const eventResult = await env.DB.prepare(
+    `DELETE FROM nostr_events WHERE kind IN (1, 7) AND created_at < ?`
+  )
+    .bind(cutoff)
+    .run();
+
+  const buried = (eventResult.meta.changes ?? 0) + (reactionResult.meta.changes ?? 0);
+  if (buried > 0) {
+    console.log(`⚰️ [HAUNT] laid ${buried} stale soul(s) to rest (older than ${RETENTION_DAYS}d)`);
+  }
 }
 
 // seepInto — the wraith slips through the relay's walls and drains it
