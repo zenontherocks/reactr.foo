@@ -887,6 +887,10 @@ function setupConfigHandlers(): void {
     document.getElementById("settings")!.classList.toggle("hidden");
   });
 
+  document.getElementById("settings-backdrop")!.addEventListener("click", () => {
+    document.getElementById("settings")!.classList.add("hidden");
+  });
+
   document.getElementById("add-emoji")!.addEventListener("click", () => {
     const input = document.getElementById("emoji-input") as HTMLInputElement;
     const emoji = input.value.trim();

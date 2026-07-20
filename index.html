@@ -7,24 +7,26 @@
     <link rel="stylesheet" href="/src/client/style.css" />
   </head>
   <body>
-    <header>
+    <aside id="sidebar">
       <h1>reactr.foo</h1>
-      <div class="header-actions">
+
+      <nav id="main-nav">
+        <a href="#/" class="nav-link active" data-route="/">Reactions</a>
+        <a href="#/feed" class="nav-link" data-route="/feed">Following</a>
+        <a href="#/global" class="nav-link" data-route="/global">Global</a>
+        <a href="#/notifications" class="nav-link" data-route="/notifications">Notifications</a>
+        <a href="#/messages" class="nav-link" data-route="/messages">Messages</a>
+        <a href="#/search" class="nav-link" data-route="/search">Search</a>
+      </nav>
+
+      <div class="sidebar-actions">
         <button id="settings-toggle">Settings</button>
         <button id="account-btn" class="primary">Account</button>
       </div>
-    </header>
+    </aside>
 
-    <nav id="main-nav">
-      <a href="#/" class="nav-link active" data-route="/">Reactions</a>
-      <a href="#/feed" class="nav-link" data-route="/feed">Following</a>
-      <a href="#/global" class="nav-link" data-route="/global">Global</a>
-      <a href="#/notifications" class="nav-link" data-route="/notifications">Notifications</a>
-      <a href="#/messages" class="nav-link" data-route="/messages">Messages</a>
-      <a href="#/search" class="nav-link" data-route="/search">Search</a>
-    </nav>
-
-    <div id="settings" class="hidden">
+    <div id="settings" class="modal hidden">
+      <div class="modal-backdrop" id="settings-backdrop"></div>
       <div class="settings-inner">
         <section>
           <h2>Your Relays</h2>
