@@ -74,6 +74,23 @@ function setStatus(el: HTMLElement, msg: string): void {
   el.textContent = msg;
 }
 
+// ── Snap-scroll feed sizing ──────────────────────────────────────────────────
+// Each post fills exactly the space below whatever's above it (header, nav,
+// status line, compose box) so scroll-snap can jump cleanly from one to the next.
+
+function fitSnapFeed(container: HTMLElement): void {
+  const top = container.getBoundingClientRect().top;
+  container.style.height = `calc(100vh - ${top}px)`;
+}
+
+function fitVisibleSnapFeeds(): void {
+  document.querySelectorAll<HTMLElement>(".snap-feed").forEach((el) => {
+    if (el.offsetParent !== null) fitSnapFeed(el);
+  });
+}
+
+window.addEventListener("resize", fitVisibleSnapFeeds);
+
 // ── Views ─────────────────────────────────────────────────────────────────────
 
 const views: Record<string, HTMLElement> = {};
@@ -135,7 +152,7 @@ function timeAgo(timestamp: number): string {
 
 function renderFeedNote(event: Event, profile?: Profile): HTMLElement {
   const el = document.createElement("article");
-  el.className = "feed-note";
+  el.className = "feed-note snap-post";
   el.dataset.eventId = event.id;
 
   const name = getDisplayName(profile, event.pubkey);
@@ -921,6 +938,7 @@ function setupRoutes(): void {
   addRoute("/", () => {
     showView("view-reactions");
     startReactionsSubscription();
+    fitSnapFeed(notesEl);
   });
 
   addRoute("/feed", () => {
@@ -933,6 +951,7 @@ function setupRoutes(): void {
     } else {
       feedContainer.innerHTML = '<p class="empty">Log in to see your following feed.</p>';
     }
+    fitSnapFeed(feedContainer);
   });
 
   addRoute("/global", () => {
@@ -942,6 +961,7 @@ function setupRoutes(): void {
       renderComposeBox(document.getElementById("view-global")!);
     }
     startGlobalSubscription();
+    fitSnapFeed(document.getElementById("global-notes")!);
   });
 
   addRoute("/notifications", () => {

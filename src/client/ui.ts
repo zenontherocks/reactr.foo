@@ -81,7 +81,7 @@ export function renderNotes(
     link.href = `https://iris.to/${nip19.noteEncode(note.noteId)}`;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.className = "note-link";
+    link.className = "note-link snap-post";
 
     const el = document.createElement("article");
     el.className = "note";

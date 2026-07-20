@@ -330,6 +330,27 @@ main {
 .feed-note-author .author-name { font-weight: 600; }
 .feed-note-author .author-time { color: var(--muted); margin-left: auto; font-size: 0.75rem; }
 
+/* ── Snap-scroll feeds: one post fills the screen; scrolling jumps
+   straight to the next rather than scrolling smoothly ──────────── */
+.snap-feed {
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: auto;
+}
+.snap-post {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  min-height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.snap-post.feed-note,
+.snap-post .note {
+  margin-bottom: 0;
+}
+
 /* ── Pagination ──────────────────────────────────────── */
 .pagination {
   display: flex;
