@@ -429,7 +429,11 @@ function send(ws: WebSocket, msg: unknown[]): void {
 //   it leaves no trace. it says nothing. it simply … takes.
 // ============================================================================
 
-const HUNTED_KINDS = [1, 7]; // text notes and reactions — the wraith's diet
+// Only reactions are harvested indiscriminately — a note only enters the crypt
+// if it's later fetched by ID via the orphan hunt below, i.e. only once it's
+// known to have a reaction. Harvesting kind 1 here too would mirror the entire
+// public firehose regardless of reactions, which is not what this relay is for.
+const HUNTED_KINDS = [7];
 const SOULS_PER_RELAY = 500; // max events siphoned per relay per haunt
 const SEEP_TIMEOUT_MS = 20_000; // how long the wraith lingers before vanishing
 const RETENTION_DAYS = 30; // how long a soul lingers in the crypt before it's laid to rest
@@ -513,11 +517,11 @@ async function haunt(env: Env): Promise<void> {
   }
 }
 
-// layToRest — deletes old notes and reactions (and their reaction index entries).
-// Scoped to HUNTED_KINDS only: replaceable events (profiles, contact lists, etc.)
-// already keep just one row per pubkey+kind via onEvent, so they're never "stale"
-// the way an old note or reaction is — pruning by age would erase a quiet user's
-// only profile row instead of decaying content.
+// layToRest — deletes old notes (kind 1) and reactions (kind 7), and their
+// reaction index entries. Scoped to just those two kinds: replaceable events
+// (profiles, contact lists, etc.) already keep just one row per pubkey+kind via
+// onEvent, so they're never "stale" the way an old note or reaction is — pruning
+// by age would erase a quiet user's only profile row instead of decaying content.
 async function layToRest(env: Env): Promise<void> {
   const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
 
