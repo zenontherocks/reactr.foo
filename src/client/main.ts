@@ -74,98 +74,6 @@ function setStatus(el: HTMLElement, msg: string): void {
   el.textContent = msg;
 }
 
-// ── Snap-scroll feed sizing ──────────────────────────────────────────────────
-// Each post fills exactly the space below whatever's above it (header, nav,
-// status line, compose box) so scroll-snap can jump cleanly from one to the next.
-
-function fitSnapFeed(container: HTMLElement): void {
-  const top = container.getBoundingClientRect().top;
-  container.style.height = `calc(100vh - ${top}px)`;
-}
-
-function fitVisibleSnapFeeds(): void {
-  document.querySelectorAll<HTMLElement>(".snap-feed").forEach((el) => {
-    if (el.offsetParent !== null) fitSnapFeed(el);
-  });
-}
-
-// The content column is centered and narrower than `main`, so there's dead
-// space to either side of it (and it isn't full-width right next to the
-// sidebar either) where a wheel gesture wouldn't land on anything scrollable.
-// Forward wheel input from anywhere in `main` outside the content column to
-// whichever view is currently visible.
-function setupMainGutterScroll(mainEl: HTMLElement): void {
-  mainEl.addEventListener(
-    "wheel",
-    (e) => {
-      const target = e.target as HTMLElement;
-      if (target.closest(".view")) return; // already over real content — let it scroll natively
-
-      const activeView = document.querySelector<HTMLElement>(".view:not(.hidden)");
-      if (!activeView) return;
-      const scrollable = activeView.querySelector<HTMLElement>(".snap-feed") ?? activeView;
-      scrollable.scrollBy({ top: e.deltaY, behavior: "auto" });
-      e.preventDefault();
-    },
-    { passive: false }
-  );
-}
-
-// When scrolling back UP into a post taller than the screen (e.g. one with
-// several images), land on its bottom instead of its top — resuming right
-// where you'd naturally scroll forward again, instead of dumping you back at
-// the start of a long post you've already seen.
-function setupDirectionalSnap(container: HTMLElement): void {
-  function currentPost(): HTMLElement | null {
-    const scrollTop = container.scrollTop;
-    let target: HTMLElement | null = null;
-    for (const post of container.querySelectorAll<HTMLElement>(".snap-post")) {
-      if (post.offsetTop <= scrollTop + 1) target = post;
-      else break;
-    }
-    return target;
-  }
-
-  let lastTop = container.scrollTop;
-  let lastPost = currentPost();
-  let scrollingUp = false;
-
-  container.addEventListener(
-    "scroll",
-    () => {
-      const top = container.scrollTop;
-      if (top !== lastTop) scrollingUp = top < lastTop;
-      lastTop = top;
-    },
-    { passive: true }
-  );
-
-  container.addEventListener("scrollend", () => {
-    const post = currentPost();
-    const changedPost = post !== lastPost;
-    lastPost = post;
-
-    // Only correct on a genuine transition into a *different*, previous post —
-    // not when merely scrolling up within a tall post you're already reading,
-    // which should behave like normal scrolling.
-    if (!scrollingUp || !changedPost || !post) return;
-
-    const containerHeight = container.clientHeight;
-
-    // Every post is at least one screen tall (min-height: 100%); only ones
-    // with more content than that actually overflow past a single screen.
-    if (post.offsetHeight <= containerHeight + 1) return;
-
-    const bottomAlignedTop = post.offsetTop + post.offsetHeight - containerHeight;
-    if (Math.abs(container.scrollTop - bottomAlignedTop) > 1) {
-      container.scrollTop = bottomAlignedTop;
-      lastTop = bottomAlignedTop;
-    }
-  });
-}
-
-window.addEventListener("resize", fitVisibleSnapFeeds);
-
 // ── Views ─────────────────────────────────────────────────────────────────────
 
 const views: Record<string, HTMLElement> = {};
@@ -204,7 +112,7 @@ function renderContent(content: string): string {
   return parts.map((part, i) => {
     if (i % 2 === 1) {
       if (IMAGE_EXT.test(part)) {
-        return `<img class="note-image" src="${esc(part)}" alt="image" loading="lazy">`;
+        return `<img class="note-image" src="${esc(part)}" alt="image">`;
       }
       if (VIDEO_EXT.test(part)) {
         return `<video class="note-image" src="${esc(part)}" controls preload="metadata"></video>`;
@@ -227,12 +135,12 @@ function timeAgo(timestamp: number): string {
 
 function renderFeedNote(event: Event, profile?: Profile): HTMLElement {
   const el = document.createElement("article");
-  el.className = "feed-note snap-post";
+  el.className = "feed-note";
   el.dataset.eventId = event.id;
 
   const name = getDisplayName(profile, event.pubkey);
   const avatar = profile?.picture
-    ? `<img src="${esc(profile.picture)}" alt="" loading="lazy">`
+    ? `<img src="${esc(profile.picture)}" alt="">`
     : `<span class="avatar-placeholder">${name.slice(0, 1).toUpperCase()}</span>`;
   const npub = nip19.npubEncode(event.pubkey);
 
@@ -599,7 +507,7 @@ function setupNotificationsView(): void {
 }
 
 function renderNotificationsView(): void {
-  const container = document.querySelector("#view-notifications")!;
+  const container = document.querySelector("#view-notifications .view-inner")!;
   const auth = getAuth();
   if (!auth.pubkey) {
     container.innerHTML = '<p class="status">Log in to see notifications.</p>';
@@ -638,7 +546,7 @@ function renderNotificationsView(): void {
 // ── Messages view ─────────────────────────────────────────────────────────────
 
 async function renderMessagesView(): Promise<void> {
-  const container = document.querySelector("#view-messages")!;
+  const container = document.querySelector("#view-messages .view-inner")!;
   const auth = getAuth();
   if (!auth.pubkey) {
     container.innerHTML = '<p class="status">Log in to see messages.</p>';
@@ -717,7 +625,7 @@ function setupNewDmHandler(): void {
 }
 
 async function openConversation(peerPubkey: string, allMessages: Event[], myPubkey: string): Promise<void> {
-  const container = document.querySelector("#view-messages")!;
+  const container = document.querySelector("#view-messages .view-inner")!;
   const profile = getCachedProfile(peerPubkey) ?? (await fetchProfiles([peerPubkey])).get(peerPubkey);
   const name = getDisplayName(profile, peerPubkey);
 
@@ -1017,7 +925,6 @@ function setupRoutes(): void {
   addRoute("/", () => {
     showView("view-reactions");
     startReactionsSubscription();
-    fitSnapFeed(notesEl);
   });
 
   addRoute("/feed", () => {
@@ -1025,22 +932,20 @@ function setupRoutes(): void {
     const auth = getAuth();
     const feedContainer = document.getElementById("feed-notes")!;
     if (auth.pubkey) {
-      renderComposeBox(document.getElementById("view-feed")!);
+      renderComposeBox(document.querySelector("#view-feed .view-inner")!);
       startFeedSubscription();
     } else {
       feedContainer.innerHTML = '<p class="empty">Log in to see your following feed.</p>';
     }
-    fitSnapFeed(feedContainer);
   });
 
   addRoute("/global", () => {
     showView("view-global");
     const auth = getAuth();
     if (auth.pubkey) {
-      renderComposeBox(document.getElementById("view-global")!);
+      renderComposeBox(document.querySelector("#view-global .view-inner")!);
     }
     startGlobalSubscription();
-    fitSnapFeed(document.getElementById("global-notes")!);
   });
 
   addRoute("/notifications", () => {
@@ -1081,8 +986,6 @@ function setupRoutes(): void {
 async function init(): Promise<void> {
   setStatus(statusEl, "Loading...");
   await ensureBootstrapped();
-  document.querySelectorAll<HTMLElement>(".snap-feed").forEach(setupDirectionalSnap);
-  setupMainGutterScroll(document.querySelector("main")!);
   config = await getConfig();
   renderConfig(config);
   setupConfigHandlers();

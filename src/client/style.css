@@ -275,14 +275,24 @@ main {
 }
 
 /* ── Views ───────────────────────────────────────────── */
+/* .view is the one scroll container per view — full width of `main`, so
+   wheel input anywhere in `main` lands on real scrollable content, no dead
+   gutters. .view-inner holds the centered, max-width content. Posts opt into
+   a light snap-to-top via scroll-snap-align on .feed-note/.note-link below;
+   proximity (not mandatory) means normal scrolling is never fought — it only
+   nudges alignment when a gesture happens to end near a post boundary. */
 .view {
   height: 100%;
   overflow-y: auto;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 1.5rem 1.5rem 0 1.5rem;
+  scroll-snap-type: y proximity;
 }
 .view.hidden { display: none; }
+
+.view-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
 
 .status { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; min-height: 1.2em; }
 
@@ -301,6 +311,7 @@ main {
   display: block;
   text-decoration: none;
   color: inherit;
+  scroll-snap-align: start;
 }
 
 .note-meta {
@@ -349,6 +360,7 @@ main {
   padding: 1rem;
   margin-bottom: 0.75rem;
   transition: border-color 0.15s;
+  scroll-snap-align: start;
 }
 .feed-note:hover { border-color: var(--accent); }
 
@@ -367,29 +379,6 @@ main {
 }
 .feed-note-author .author-name { font-weight: 600; }
 .feed-note-author .author-time { color: var(--muted); margin-left: auto; font-size: 0.75rem; }
-
-/* ── Snap-scroll feeds: one post fills the screen; scrolling jumps
-   straight to the next rather than scrolling smoothly ──────────── */
-.snap-feed {
-  position: relative; /* makes .snap-post children's offsetTop relative to this
-                          container's own scroll coordinates, not the page */
-  overflow-y: auto;
-  scroll-snap-type: y mandatory;
-  scroll-behavior: auto;
-}
-.snap-post {
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  min-height: 100%;
-  margin-bottom: 4rem; /* scroll slack past the card's true bottom before the next post snaps in */
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.snap-post .note {
-  margin-bottom: 0; /* the leaderboard's nested card stays flush; the slot's own margin (above) is the gap */
-}
 
 /* ── Pagination ──────────────────────────────────────── */
 .pagination {

@@ -81,7 +81,7 @@ export function renderNotes(
     link.href = `https://iris.to/${nip19.noteEncode(note.noteId)}`;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.className = "note-link snap-post";
+    link.className = "note-link";
 
     const el = document.createElement("article");
     el.className = "note";
@@ -219,7 +219,7 @@ function renderContent(content: string): string {
     if (i % 2 === 1) {
       // Odd indices are captured URL groups
       if (IMAGE_EXT.test(part)) {
-        return `<img class="note-image" src="${esc(part)}" alt="image" loading="lazy">`;
+        return `<img class="note-image" src="${esc(part)}" alt="image">`;
       }
       return esc(part);
     }

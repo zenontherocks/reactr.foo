@@ -80,50 +80,66 @@
     <main>
       <!-- View: Reactions (default home) -->
       <div id="view-reactions" class="view">
-        <p id="status" class="status"></p>
-        <div id="notes" class="snap-feed"></div>
+        <div class="view-inner">
+          <p id="status" class="status"></p>
+          <div id="notes"></div>
+        </div>
       </div>
 
       <!-- View: Following feed -->
       <div id="view-feed" class="view hidden">
-        <p id="feed-status" class="status"></p>
-        <div id="feed-notes" class="snap-feed"></div>
+        <div class="view-inner">
+          <p id="feed-status" class="status"></p>
+          <div id="feed-notes"></div>
+        </div>
       </div>
 
       <!-- View: Global feed -->
       <div id="view-global" class="view hidden">
-        <p id="global-status" class="status"></p>
-        <div id="global-notes" class="snap-feed"></div>
+        <div class="view-inner">
+          <p id="global-status" class="status"></p>
+          <div id="global-notes"></div>
+        </div>
       </div>
 
       <!-- View: Notifications -->
       <div id="view-notifications" class="view hidden">
-        <p class="status">Log in to see notifications.</p>
+        <div class="view-inner">
+          <p class="status">Log in to see notifications.</p>
+        </div>
       </div>
 
       <!-- View: Messages -->
       <div id="view-messages" class="view hidden">
-        <p class="status">Log in to see messages.</p>
+        <div class="view-inner">
+          <p class="status">Log in to see messages.</p>
+        </div>
       </div>
 
       <!-- View: Search -->
       <div id="view-search" class="view hidden">
-        <div class="input-row" style="margin-bottom: 1rem;">
-          <input id="search-input" type="text" placeholder="Search notes, users, hashtags..." />
-          <button id="search-btn">Search</button>
+        <div class="view-inner">
+          <div class="input-row" style="margin-bottom: 1rem;">
+            <input id="search-input" type="text" placeholder="Search notes, users, hashtags..." />
+            <button id="search-btn">Search</button>
+          </div>
+          <div id="search-results"></div>
         </div>
-        <div id="search-results"></div>
       </div>
 
       <!-- View: Note thread -->
       <div id="view-note" class="view hidden">
-        <div id="note-thread"></div>
+        <div class="view-inner">
+          <div id="note-thread"></div>
+        </div>
       </div>
 
       <!-- View: Profile -->
       <div id="view-profile" class="view hidden">
-        <div id="profile-header"></div>
-        <div id="profile-notes"></div>
+        <div class="view-inner">
+          <div id="profile-header"></div>
+          <div id="profile-notes"></div>
+        </div>
       </div>
     </main>
 
