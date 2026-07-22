@@ -74,6 +74,58 @@ function setStatus(el: HTMLElement, msg: string): void {
   el.textContent = msg;
 }
 
+// ── Wheel-driven post navigation ─────────────────────────────────────────────
+// Each wheel movement snaps straight to the next/previous post's top — unless
+// the cursor is over a post taller than the screen, in which case the wheel
+// scrolls that post's own content normally instead of skipping past it.
+function setupWheelSnapNavigation(mainEl: HTMLElement): void {
+  let locked = false;
+
+  mainEl.addEventListener(
+    "wheel",
+    (e) => {
+      const activeView = document.querySelector<HTMLElement>(".view:not(.hidden)");
+      if (!activeView) return;
+
+      const posts = [...activeView.querySelectorAll<HTMLElement>(".feed-note, .note-link")];
+      if (posts.length === 0) return; // no posts here (e.g. search box) — scroll normally
+
+      const elAtPoint = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const postEl = elAtPoint?.closest<HTMLElement>(".feed-note, .note-link") ?? null;
+
+      if (postEl && postEl.offsetHeight > activeView.clientHeight + 1) {
+        return; // cursor is over a post taller than the screen — scroll it normally
+      }
+
+      e.preventDefault();
+      if (locked) return;
+
+      const currentTop = activeView.scrollTop;
+      let target: HTMLElement | undefined;
+      if (e.deltaY > 0) {
+        target = posts.find((p) => p.offsetTop > currentTop + 1);
+      } else if (e.deltaY < 0) {
+        const before = posts.filter((p) => p.offsetTop < currentTop - 1);
+        target = before[before.length - 1];
+      }
+
+      if (target) {
+        activeView.scrollTo({ top: target.offsetTop, behavior: "auto" });
+      } else if (e.deltaY < 0 && currentTop > 0) {
+        activeView.scrollTo({ top: 0, behavior: "auto" });
+      } else {
+        return; // already at the start/end — nothing to snap to
+      }
+
+      locked = true;
+      setTimeout(() => {
+        locked = false;
+      }, 350);
+    },
+    { passive: false }
+  );
+}
+
 // ── Views ─────────────────────────────────────────────────────────────────────
 
 const views: Record<string, HTMLElement> = {};
@@ -986,6 +1038,7 @@ function setupRoutes(): void {
 async function init(): Promise<void> {
   setStatus(statusEl, "Loading...");
   await ensureBootstrapped();
+  setupWheelSnapNavigation(document.querySelector("main")!);
   config = await getConfig();
   renderConfig(config);
   setupConfigHandlers();
