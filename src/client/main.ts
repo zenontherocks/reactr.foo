@@ -89,12 +89,45 @@ function fitVisibleSnapFeeds(): void {
   });
 }
 
+// The content column is centered and narrower than `main`, so there's dead
+// space to either side of it (and it isn't full-width right next to the
+// sidebar either) where a wheel gesture wouldn't land on anything scrollable.
+// Forward wheel input from anywhere in `main` outside the content column to
+// whichever view is currently visible.
+function setupMainGutterScroll(mainEl: HTMLElement): void {
+  mainEl.addEventListener(
+    "wheel",
+    (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest(".view")) return; // already over real content — let it scroll natively
+
+      const activeView = document.querySelector<HTMLElement>(".view:not(.hidden)");
+      if (!activeView) return;
+      const scrollable = activeView.querySelector<HTMLElement>(".snap-feed") ?? activeView;
+      scrollable.scrollBy({ top: e.deltaY, behavior: "auto" });
+      e.preventDefault();
+    },
+    { passive: false }
+  );
+}
+
 // When scrolling back UP into a post taller than the screen (e.g. one with
 // several images), land on its bottom instead of its top — resuming right
 // where you'd naturally scroll forward again, instead of dumping you back at
 // the start of a long post you've already seen.
 function setupDirectionalSnap(container: HTMLElement): void {
+  function currentPost(): HTMLElement | null {
+    const scrollTop = container.scrollTop;
+    let target: HTMLElement | null = null;
+    for (const post of container.querySelectorAll<HTMLElement>(".snap-post")) {
+      if (post.offsetTop <= scrollTop + 1) target = post;
+      else break;
+    }
+    return target;
+  }
+
   let lastTop = container.scrollTop;
+  let lastPost = currentPost();
   let scrollingUp = false;
 
   container.addEventListener(
@@ -108,24 +141,25 @@ function setupDirectionalSnap(container: HTMLElement): void {
   );
 
   container.addEventListener("scrollend", () => {
-    if (!scrollingUp) return;
+    const post = currentPost();
+    const changedPost = post !== lastPost;
+    lastPost = post;
+
+    // Only correct on a genuine transition into a *different*, previous post —
+    // not when merely scrolling up within a tall post you're already reading,
+    // which should behave like normal scrolling.
+    if (!scrollingUp || !changedPost || !post) return;
 
     const containerHeight = container.clientHeight;
-    const scrollTop = container.scrollTop;
-    let target: HTMLElement | null = null;
-    for (const post of container.querySelectorAll<HTMLElement>(".snap-post")) {
-      if (post.offsetTop <= scrollTop + 1) target = post;
-      else break;
-    }
-    if (!target) return;
 
     // Every post is at least one screen tall (min-height: 100%); only ones
     // with more content than that actually overflow past a single screen.
-    if (target.offsetHeight <= containerHeight + 1) return;
+    if (post.offsetHeight <= containerHeight + 1) return;
 
-    const bottomAlignedTop = target.offsetTop + target.offsetHeight - containerHeight;
+    const bottomAlignedTop = post.offsetTop + post.offsetHeight - containerHeight;
     if (Math.abs(container.scrollTop - bottomAlignedTop) > 1) {
       container.scrollTop = bottomAlignedTop;
+      lastTop = bottomAlignedTop;
     }
   });
 }
@@ -1048,6 +1082,7 @@ async function init(): Promise<void> {
   setStatus(statusEl, "Loading...");
   await ensureBootstrapped();
   document.querySelectorAll<HTMLElement>(".snap-feed").forEach(setupDirectionalSnap);
+  setupMainGutterScroll(document.querySelector("main")!);
   config = await getConfig();
   renderConfig(config);
   setupConfigHandlers();

@@ -381,14 +381,14 @@ main {
   scroll-snap-align: start;
   scroll-snap-stop: always;
   min-height: 100%;
+  margin-bottom: 4rem; /* scroll slack past the card's true bottom before the next post snaps in */
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
-.snap-post.feed-note,
 .snap-post .note {
-  margin-bottom: 0;
+  margin-bottom: 0; /* the leaderboard's nested card stays flush; the slot's own margin (above) is the gap */
 }
 
 /* ── Pagination ──────────────────────────────────────── */
