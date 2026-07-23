@@ -39,7 +39,8 @@ import type { Profile } from "./profile";
 let config: AppConfig = { emoji_weights: [] };
 const notesMap = new Map<string, Event>();
 const reactionsByNote = new Map<string, Record<string, number>>();
-let currentPage = 0;
+const REACTIONS_PAGE_SIZE = 50;
+let visibleCount = REACTIONS_PAGE_SIZE;
 let feedSub: SubCloser | null = null;
 
 function getSortedNoteIds(): string[] {
@@ -50,8 +51,8 @@ function getSortedNoteIds(): string[] {
   });
 }
 
-async function ensureNotesForPage(page: number, pageSize = 50): Promise<void> {
-  const ids = getSortedNoteIds().slice(page * pageSize, (page + 1) * pageSize);
+async function ensureNotesUpTo(count: number): Promise<void> {
+  const ids = getSortedNoteIds().slice(0, count);
   const missing = ids.filter((id) => !notesMap.has(id));
   if (missing.length > 0) {
     const notes = await querySync({ ids: missing, kinds: [1] });
@@ -291,8 +292,8 @@ function scheduleReactionsRender(): void {
   if (reactionsRenderTimer) return;
   reactionsRenderTimer = setTimeout(async () => {
     reactionsRenderTimer = null;
-    await ensureNotesForPage(currentPage);
-    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
+    await ensureNotesUpTo(visibleCount);
+    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, visibleCount);
     setStatus(statusEl, `${reactionsByNote.size} note(s) — live`);
   }, 400);
 }
@@ -300,7 +301,7 @@ function scheduleReactionsRender(): void {
 function startReactionsSubscription(): void {
   stopReactionsSubscription();
   reactionsByNote.clear();
-  currentPage = 0;
+  visibleCount = REACTIONS_PAGE_SIZE;
   setStatus(statusEl, "Loading reactions...");
 
   reactionsSub = subscribe({ kinds: [7], limit: 500 }, (event) => {
@@ -939,7 +940,7 @@ function setupConfigHandlers(): void {
   document.getElementById("save-config")!.addEventListener("click", async () => {
     setStatus(statusEl, "Saving...");
     await saveConfig(config);
-    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
+    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, visibleCount);
     setStatus(statusEl, `${reactionsByNote.size} note(s) — live`);
   });
 
@@ -1047,10 +1048,10 @@ async function init(): Promise<void> {
   setupNotificationsView();
   updateAuthUI();
 
-  notesEl.addEventListener("paginate", async (e) => {
-    currentPage = (e as CustomEvent<{ page: number }>).detail.page;
-    await ensureNotesForPage(currentPage);
-    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, currentPage);
+  notesEl.addEventListener("showmore", async () => {
+    visibleCount += REACTIONS_PAGE_SIZE;
+    await ensureNotesUpTo(visibleCount);
+    renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, visibleCount);
   });
 
   setupRoutes();

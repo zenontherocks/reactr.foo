@@ -380,15 +380,13 @@ main {
 .feed-note-author .author-name { font-weight: 600; }
 .feed-note-author .author-time { color: var(--muted); margin-left: auto; font-size: 0.75rem; }
 
-/* ── Pagination ──────────────────────────────────────── */
+/* ── Show more button ────────────────────────────────── */
 .pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
   padding: 1rem 0;
 }
-.pagination-label { font-size: 0.8rem; color: var(--muted); }
 
 /* ── Note action bar ─────────────────────────────────── */
 .note-actions {
