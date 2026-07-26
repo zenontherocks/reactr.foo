@@ -111,9 +111,9 @@ function setupWheelSnapNavigation(mainEl: HTMLElement): void {
       }
 
       if (target) {
-        activeView.scrollTo({ top: target.offsetTop, behavior: "auto" });
+        activeView.scrollTo({ top: target.offsetTop, behavior: "smooth" });
       } else if (e.deltaY < 0 && currentTop > 0) {
-        activeView.scrollTo({ top: 0, behavior: "auto" });
+        activeView.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         return; // already at the start/end — nothing to snap to
       }
@@ -121,7 +121,7 @@ function setupWheelSnapNavigation(mainEl: HTMLElement): void {
       locked = true;
       setTimeout(() => {
         locked = false;
-      }, 350);
+      }, 500);
     },
     { passive: false }
   );
