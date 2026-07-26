@@ -91,17 +91,29 @@ function setupWheelSnapNavigation(mainEl: HTMLElement): void {
       const posts = [...activeView.querySelectorAll<HTMLElement>(".feed-note, .note-link")];
       if (posts.length === 0) return; // no posts here (e.g. search box) — scroll normally
 
+      const currentTop = activeView.scrollTop;
       const elAtPoint = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-      const postEl = elAtPoint?.closest<HTMLElement>(".feed-note, .note-link") ?? null;
+      let postEl = elAtPoint?.closest<HTMLElement>(".feed-note, .note-link") ?? null;
+
+      // The cursor may be over trailing UI below the last post (e.g. the
+      // "Show more" button) rather than the post itself. Fall back to
+      // whichever post currently occupies the scroll position, so a tall
+      // post keeps scrolling its own content right up to (and past) its
+      // bottom edge instead of snapping back to its top.
+      if (!postEl) {
+        postEl =
+          posts.find(
+            (p) => p.offsetTop <= currentTop && currentTop < p.offsetTop + p.offsetHeight
+          ) ?? null;
+      }
 
       if (postEl && postEl.offsetHeight > activeView.clientHeight + 1) {
-        return; // cursor is over a post taller than the screen — scroll it normally
+        return; // cursor is over (or scrolled into) a post taller than the screen — scroll it normally
       }
 
       e.preventDefault();
       if (locked) return;
 
-      const currentTop = activeView.scrollTop;
       let target: HTMLElement | undefined;
       if (e.deltaY > 0) {
         target = posts.find((p) => p.offsetTop > currentTop + 1);
