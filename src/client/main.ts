@@ -302,6 +302,7 @@ function startReactionsSubscription(): void {
   stopReactionsSubscription();
   reactionsByNote.clear();
   visibleCount = REACTIONS_PAGE_SIZE;
+  notesEl.innerHTML = "";
   setStatus(statusEl, "Loading reactions...");
 
   reactionsSub = subscribe({ kinds: [7], limit: 500 }, (event) => {
