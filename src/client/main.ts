@@ -39,6 +39,8 @@ import type { Profile } from "./profile";
 let config: AppConfig = { emoji_weights: [] };
 const notesMap = new Map<string, Event>();
 const reactionsByNote = new Map<string, Record<string, number>>();
+const countedReactionIds = new Set<string>();
+let isFirstReactionsLoad = true;
 const REACTIONS_PAGE_SIZE = 50;
 let visibleCount = REACTIONS_PAGE_SIZE;
 let feedSub: SubCloser | null = null;
@@ -59,6 +61,64 @@ async function ensureNotesUpTo(count: number): Promise<void> {
     for (const note of notes) notesMap.set(note.id, note);
   }
 }
+
+// ── Reactions/notes persistent cache ──────────────────────────────────────────
+// Avoids re-fetching everything from relays on every page refresh: the top-
+// ranked notes/reactions are cached in localStorage and rendered instantly on
+// cold start, while the live subscription (below) refreshes/extends them.
+
+const NOTES_CACHE_KEY = "reactr_notes";
+const REACTIONS_CACHE_KEY = "reactr_reactions";
+const REACTION_IDS_CACHE_KEY = "reactr_reaction_ids";
+const MAX_NOTES_CACHE = 300;
+const MAX_REACTIONS_CACHE = 1000;
+const MAX_REACTION_IDS_CACHE = 5000;
+
+try {
+  const raw = localStorage.getItem(NOTES_CACHE_KEY);
+  if (raw) {
+    const entries = JSON.parse(raw) as Array<[string, Event]>;
+    for (const [id, note] of entries) notesMap.set(id, note);
+  }
+} catch { /* ignore */ }
+
+try {
+  const raw = localStorage.getItem(REACTIONS_CACHE_KEY);
+  if (raw) {
+    const entries = JSON.parse(raw) as Array<[string, Record<string, number>]>;
+    for (const [id, counts] of entries) reactionsByNote.set(id, counts);
+  }
+} catch { /* ignore */ }
+
+try {
+  const raw = localStorage.getItem(REACTION_IDS_CACHE_KEY);
+  if (raw) {
+    const ids = JSON.parse(raw) as string[];
+    for (const id of ids) countedReactionIds.add(id);
+  }
+} catch { /* ignore */ }
+
+function persistReactionsCache(): void {
+  try {
+    const ranked = getSortedNoteIds();
+
+    const noteEntries = ranked
+      .slice(0, MAX_NOTES_CACHE)
+      .map((id) => notesMap.get(id))
+      .filter((n): n is Event => n !== undefined)
+      .map((n) => [n.id, n] as [string, Event]);
+    localStorage.setItem(NOTES_CACHE_KEY, JSON.stringify(noteEntries));
+
+    const reactionEntries = ranked
+      .slice(0, MAX_REACTIONS_CACHE)
+      .map((id) => [id, reactionsByNote.get(id)!] as [string, Record<string, number>]);
+    localStorage.setItem(REACTIONS_CACHE_KEY, JSON.stringify(reactionEntries));
+
+    const idEntries = [...countedReactionIds].slice(-MAX_REACTION_IDS_CACHE);
+    localStorage.setItem(REACTION_IDS_CACHE_KEY, JSON.stringify(idEntries));
+  } catch { /* quota exceeded, ignore */ }
+}
+
 let globalSub: SubCloser | null = null;
 let contacts: string[] = [];
 
@@ -307,20 +367,43 @@ function scheduleReactionsRender(): void {
     await ensureNotesUpTo(visibleCount);
     renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, visibleCount);
     setStatus(statusEl, `${reactionsByNote.size} note(s) — live`);
+    persistReactionsCache();
   }, 400);
 }
 
 function startReactionsSubscription(): void {
   stopReactionsSubscription();
-  reactionsByNote.clear();
-  visibleCount = REACTIONS_PAGE_SIZE;
-  notesEl.innerHTML = "";
-  setStatus(statusEl, "Loading reactions...");
+
+  if (isFirstReactionsLoad) {
+    isFirstReactionsLoad = false;
+    // Cold start: notesMap/reactionsByNote/countedReactionIds were already
+    // seeded from localStorage above. Render the cached snapshot immediately,
+    // before the live subscription (which must connect to every relay) can
+    // deliver anything.
+    if (reactionsByNote.size > 0) {
+      setStatus(statusEl, `${reactionsByNote.size} note(s) — cached, refreshing…`);
+      renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, visibleCount);
+    } else {
+      notesEl.innerHTML = "";
+      setStatus(statusEl, "Loading reactions...");
+    }
+  } else {
+    // Re-navigating back to "/" within this session — clear and rebuild from
+    // scratch, same as always. Also clear the dedup set so recounting isn't
+    // permanently blocked by IDs it already counted before this clear.
+    reactionsByNote.clear();
+    countedReactionIds.clear();
+    visibleCount = REACTIONS_PAGE_SIZE;
+    notesEl.innerHTML = "";
+    setStatus(statusEl, "Loading reactions...");
+  }
 
   reactionsSub = subscribe({ kinds: [7], limit: 500 }, (event) => {
     const eTag = event.tags.find((t) => t[0] === "e");
     const noteId = eTag?.[1];
     if (!noteId || !event.content) return;
+    if (countedReactionIds.has(event.id)) return; // already counted (e.g. cached, or relay backlog redelivery)
+    countedReactionIds.add(event.id);
     const counts = reactionsByNote.get(noteId) ?? {};
     counts[event.content] = (counts[event.content] ?? 0) + 1;
     reactionsByNote.set(noteId, counts);
@@ -955,6 +1038,7 @@ function setupConfigHandlers(): void {
     await saveConfig(config);
     renderNotes(notesEl, notesMap, reactionsByNote, config.emoji_weights, visibleCount);
     setStatus(statusEl, `${reactionsByNote.size} note(s) — live`);
+    persistReactionsCache();
   });
 
   document.getElementById("emoji-input")!.addEventListener("keydown", (e) => {
