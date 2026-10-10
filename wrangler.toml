@@ -18,4 +18,8 @@ database_id = "debbffbe-0fae-4cdc-aee5-67e8c39ff823"
 migrations_dir = "migrations"
 
 [triggers]
-crons = ["*/5 * * * *"]  # the haunting runs every 5 minutes
+# The haunting is paused: with no real traffic, this background crawl (every
+# 5 minutes, scanning the full nostr_events/reaction_notes tables each time)
+# was the entire source of ~7M D1 reads/day. Re-enable with
+# crons = ["*/5 * * * *"] once there's real usage to justify backfilling.
+crons = []
