@@ -18,8 +18,10 @@ database_id = "debbffbe-0fae-4cdc-aee5-67e8c39ff823"
 migrations_dir = "migrations"
 
 [triggers]
-# The haunting is paused: with no real traffic, this background crawl (every
-# 5 minutes, scanning the full nostr_events/reaction_notes tables each time)
-# was the entire source of ~7M D1 reads/day. Re-enable with
-# crons = ["*/5 * * * *"] once there's real usage to justify backfilling.
-crons = []
+# The haunting now only harvests reaction counts (never note content, which
+# the client fetches live from relays on demand) and prunes via an indexed
+# query, so its per-tick cost is small and roughly flat regardless of table
+# size. Hourly instead of every 5 minutes is a 12x cut in run count, keeping
+# writes/day (relays x SOULS_PER_RELAY x 2) comfortably under D1's free-tier
+# write cap even as the relay list grows.
+crons = ["0 * * * *"]
